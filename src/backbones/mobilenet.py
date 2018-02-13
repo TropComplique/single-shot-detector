@@ -1,6 +1,8 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-from src.constants import DATA_FORMAT
+
+
+DATA_FORMAT = 'NCHW'
 
 
 def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
@@ -58,31 +60,10 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
             for i, (stride, num_filters) in enumerate(strides_and_filters, 1):
 
                 layer_name = 'Conv2d_%d_depthwise' % i
-                #x = slim.separable_conv2d(x, None, (3, 3), depth_multiplier=1, stride=stride, scope=layer_name)
-                x = tf.layers.separable_conv2d(
-                    x,
-                    10,
-                    (3, 3),
-                    strides=stride,
-                    padding='same',
-                    data_format='channels_first',
-                    dilation_rate=(1, 1),
-                    depth_multiplier=1,
-                    activation=tf.nn.relu6,
-                    use_bias=True,
-                    depthwise_initializer=None,
-                    pointwise_initializer=None,
-                    bias_initializer=tf.zeros_initializer(),
-                    depthwise_regularizer=None,
-                    pointwise_regularizer=None,
-                    bias_regularizer=None,
-                    activity_regularizer=None,
-                    depthwise_constraint=None,
-                    pointwise_constraint=None,
-                    bias_constraint=None,
-                    trainable=True,
-                    name=None,
-                    reuse=None)
+                with tf.variable_scope(layer_name):
+                    x = _depthwise_conv(x, strides=stride)
+                    x = batch_norm(x)
+                    x = tf.nn.relu6(x)
                 features[layer_name] = x
 
                 layer_name = 'Conv2d_%d_pointwise' % i
@@ -90,3 +71,21 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
                 features[layer_name] = x
 
     return x, features
+
+
+def _depthwise_conv(x, kernel=3, strides=1, padding='SAME', trainable=True):
+
+    in_channels = x.shape.as_list()[1]
+
+    W = tf.get_variable(
+        'weights', [kernel, kernel, in_channels, 1],
+        tf.float32, trainable=trainable
+    )
+    b = tf.get_variable(
+        'bias', [in_channels],
+        tf.float32, trainable=trainable
+    )
+
+    x = tf.nn.depthwise_conv2d(x, W, [1, strides, strides, 1], padding, data_format=DATA_FORMAT)
+    x = tf.nn.bias_add(x, b, data_format=DATA_FORMAT)
+    return x

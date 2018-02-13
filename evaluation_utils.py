@@ -1,4 +1,6 @@
 import numpy as np
+import tensorflow as tf
+
 
 class Box:
     def __init__(self, image, box, score=None):
@@ -55,11 +57,39 @@ class Evaluator:
         result = {}
         for label in range(self.num_classes):
             groundtruth_by_image = self.groundtruth_by_label_by_image[label]
-            ap, best_precision, best_recall, best_threshold = evaluate_detector(
+            result[label] = evaluate_detector(
                 groundtruth_by_image, self.detections_by_label[label], iou_threshold
             )
-            result[label] = ap#(ap, best_precision, best_recall, best_threshold)
         return result
+
+    def clear(self):
+        self.detections_by_label = {label: [] for label in range(num_classes)}
+        self.groundtruth_by_label_by_image = {label: {} for label in range(num_classes)}
+
+    def get_estimator_eval_metric_ops(self, images, groundtruth, predictions):
+
+        def update_op(images, g_boxes, g_labels, g_num_boxes, boxes, labels, scores, num_boxes):
+            self.add_groundtruth(images, g_boxes, g_labels, g_num_boxes)
+            self.add_detections(images, boxes, labels, scores, num_boxes)
+
+        tensors = [
+            images, groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes'],
+            predictions['boxes'], predictions['labels'], predictions['scores'], predictions['num_boxes']
+        ]
+        update_op = tf.py_func(update_op, tensors, [], stateful=True)
+
+        def get_value_func(label):
+            def value_func():
+                result = self.evaluator.evaluate()
+                self.clear()
+                return np.float32(result[label]['ap'])
+            return value_func
+
+        eval_metric_ops = {
+            'ap_' + str(label): (tf.py_func(get_value_func(label), [], [tf.float32]), update_op)
+            for label in range(self.num_classes)
+        }
+        return eval_metric_ops
 
 
 def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
@@ -70,7 +100,7 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
         all_detections: a list of boxes.
         iou_threshold: a float number.
     Returns:
-        four float numbers.
+        a dict with four float numbers.
     """
 
     # each ground truth box is either TP or FN
@@ -123,7 +153,10 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
     best_threshold, best_precision, best_recall = compute_best_threshold(
         precision, recall, confidences
     )
-    return ap, best_precision, best_recall, best_threshold
+    return {
+        'ap': ap, 'best_precision': best_precision,
+        'best_recall': best_recall, 'best_threshold': best_threshold
+    }
 
 
 def compute_best_threshold(precision, recall, confidences):

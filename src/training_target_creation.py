@@ -20,7 +20,7 @@ def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, thr
         num_anchors = anchors.shape[0]
         matches = tf.cond(
             tf.greater(N, 0),
-            lambda: _match(anchors, groundtruth_boxes, threshold), 
+            lambda: _match(anchors, groundtruth_boxes, threshold),
             lambda: -1 * tf.ones([num_anchors], dtype=tf.int32)
         )
 
@@ -100,13 +100,10 @@ def _create_targets(anchors, groundtruth_boxes, groundtruth_labels, matches, num
 
     matched_anchor_indices = tf.where(tf.greater_equal(matches, 0))  # shape [num_matches, 1]
     matched_anchor_indices = tf.squeeze(matched_anchor_indices, axis=1)
-    #print(matched_anchor_indices)
-    #matched_anchor_indices.set_shape([None])
     matched_gt_indices = tf.gather(matches, matched_anchor_indices)  # shape [num_matches]
 
     matched_anchors = tf.gather(anchors, matched_anchor_indices)  # shape [num_matches, 4]
     matched_gt_boxes = tf.gather(groundtruth_boxes, matched_gt_indices)  # shape [num_matches, 4]
-    #matched_gt_boxes = tf.Print(matched_gt_boxes, [matched_gt_boxes, matched_anchors])
     matched_reg_targets = encode(matched_gt_boxes, matched_anchors)  # shape [num_matches, 4]
 
     unmatched_anchor_indices = tf.where(tf.equal(matches, -1))

@@ -1,7 +1,6 @@
 import tensorflow as tf
 
 
-DATA_FORMAT = 'NCHW'
 EPSILON = 1e-8
 SCALE_FACTORS = [10.0, 10.0, 5.0, 5.0]
 

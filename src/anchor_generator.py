@@ -28,12 +28,12 @@ class AnchorGenerator:
         self.interpolated_scale_aspect_ratio = interpolated_scale_aspect_ratio
         self.reduce_boxes_in_lowest_layer = reduce_boxes_in_lowest_layer
 
-    def __call__(self, image_features, image_aspect_ratio):
+    def __call__(self, image_features, images):
         """
         Arguments:
             image_features: a list of float tensors where the ith tensor
                 has shape [batch, channels_i, height_i, width_i].
-            image_aspect_ratio: a float tensor with shape [].
+            images:  a float tensor with shape [batch_size, 3, height, width].
         Returns:
             a float tensor with shape [num_anchor, 4],
             boxes with normalized coordinates (clipped to the unit square).
@@ -44,6 +44,9 @@ class AnchorGenerator:
             height_i, width_i = feature_map.shape.as_list()[2:]
             feature_map_shape_list.append((height_i, width_i))
         print('sizes of feature maps:', feature_map_shape_list)
+
+        h, w = images.shape.as_list()[2:]
+        image_aspect_ratio = w/h
 
         scales = [
             self.min_scale + (self.max_scale - self.min_scale)*i/(num_layers - 1)

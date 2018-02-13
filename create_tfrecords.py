@@ -52,6 +52,8 @@ def dict_to_tf_example(annotation, image_dir, labels):
         an instance of tf.Example.
     """
     image_name = annotation['filename']
+    assert image_name.endswith('.jpg')
+
     image_path = os.path.join(image_dir, image_name)
     with tf.gfile.GFile(image_path, 'rb') as f:
         encoded_jpg = f.read()
@@ -65,6 +67,7 @@ def dict_to_tf_example(annotation, image_dir, labels):
     width = int(annotation['size']['width'])
     height = int(annotation['size']['height'])
     assert width > 0 and height > 0
+    assert image.size[0] == width and image.size[1] == height
     ymin, xmin, ymax, xmax, classes = [], [], [], [], []
 
     annotation_name = image_name[:-4] + '.json'

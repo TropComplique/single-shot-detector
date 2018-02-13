@@ -151,7 +151,7 @@ def _subsample_selection_to_desired_neg_pos_ratio(
     subsampled_selection_indices = tf.where(
         tf.logical_or(positives_indicator, top_k_negatives_indicator)
     )  # shape [num_hard_examples, 1]
-    subsampled_selection_indices = tf.squeeze(subsampled_selection_indices)
+    subsampled_selection_indices = tf.squeeze(subsampled_selection_indices, axis=1)
     selected_indices = tf.gather(indices, subsampled_selection_indices)
 
     num_negatives = tf.size(subsampled_selection_indices) - num_positives

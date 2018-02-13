@@ -1,6 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-from .constants import DATA_FORMAT, MATCHING_THRESHOLD
+
+from .constants import MATCHING_THRESHOLD
 from .utils import batch_multiclass_non_max_suppression, batch_decode
 from .training_target_creation import get_targets
 from .losses import localization_loss, classification_loss, apply_hard_mining
@@ -11,8 +12,7 @@ class SSD:
 
         feature_maps = feature_extractor(images)
         self.num_classes = num_classes
-        h, w = images.shape.as_list()[2:]
-        self.anchors = anchor_generator(feature_maps, w/h)
+        self.anchors = anchor_generator(feature_maps, images)
         self.num_basis_anchors = anchor_generator.num_basis_anchors
         self._add_box_predictions(feature_maps)
 
@@ -42,7 +42,7 @@ class SSD:
             y = slim.conv2d(
                 x, num_predictions_per_location * 4,
                 [1, 1], activation_fn=None, scope='box_encoding_predictor_%d' % i,
-                data_format=DATA_FORMAT
+                data_format='NCHW'
             )
             # it has shape [batch_size, num_predictions_per_location * 4, height_i, width_i]
             y = tf.transpose(y, perm=[0, 2, 3, 1])
@@ -52,7 +52,7 @@ class SSD:
             y = slim.conv2d(
                 x, num_predictions_per_location * (num_classes + 1),
                 [1, 1], activation_fn=None, scope='class_predictor_%d' % i,
-                data_format=DATA_FORMAT
+                data_format='NCHW'
             )
             # it has  shape [batch_size, num_predictions_per_location * (num_classes + 1), height_i, width_i]
             y = tf.transpose(y, perm=[0, 2, 3, 1])
@@ -76,7 +76,8 @@ class SSD:
                 score_threshold, iou_threshold,
                 max_boxes_per_class, self.num_classes
             )
-            return boxes, scores, classes, num_detections
+            predictions = {'boxes': boxes, 'labels': classes, 'scores': scores, 'num_boxes': num_detections}
+            return predictions
 
     def loss(self, boxes, labels, num_boxes):
         """Compute scalar loss tensors with respect to provided groundtruth.

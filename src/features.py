@@ -1,6 +1,8 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-from .constants import DATA_FORMAT
+
+
+DATA_FORMAT = 'NCHW'
 
 
 class FeatureExtractor:
