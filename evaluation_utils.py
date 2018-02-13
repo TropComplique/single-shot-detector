@@ -1,10 +1,5 @@
 import numpy as np
 
-"""
-This is python functions for evaluating object detectors.
-"""
-
-
 class Box:
     def __init__(self, image, box, score=None):
         """
@@ -14,7 +9,7 @@ class Box:
             score: a float number or None.
         """
         self.image = image
-        self.score = score
+        self.confidence = score
         self.is_matched = False
 
         # top left corner
@@ -30,8 +25,9 @@ class Evaluator:
     def __init__(self, num_classes):
         self.detections_by_label = {label: [] for label in range(num_classes)}
         self.groundtruth_by_label_by_image = {label: {} for label in range(num_classes)}
+        self.num_classes = num_classes
 
-    def add_groundtruth(self, images, boxes, labels):
+    def add_groundtruth(self, images, boxes, labels, num_boxes):
         batch_size = len(images)
         for i, n, image in zip(range(batch_size), num_boxes, images):
             for box, label in zip(boxes[i][:n], labels[i][:n]):
@@ -55,14 +51,15 @@ class Evaluator:
             for box, label, score in zip(boxes[i][:n], labels[i][:n], scores[i][:n]):
                 self.detections_by_label[label] += [Box(image, box, score)]
 
-    def evaluate(iou_threshold=0.5):
+    def evaluate(self, iou_threshold=0.5):
         result = {}
-        for label in range(num_classes):
+        for label in range(self.num_classes):
             groundtruth_by_image = self.groundtruth_by_label_by_image[label]
             ap, best_precision, best_recall, best_threshold = evaluate_detector(
                 groundtruth_by_image, self.detections_by_label[label], iou_threshold
             )
-            result[label] = (ap, best_precision, best_recall, best_threshold)
+            result[label] = ap#(ap, best_precision, best_recall, best_threshold)
+        return result
 
 
 def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):

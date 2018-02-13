@@ -35,11 +35,13 @@ class Pipeline:
         if shuffle:
             dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
 
-        padded_shapes = ([3, self.image_height, self.image_width], [None, 4], [None], [])
-        dataset = dataset.apply(
-            tf.contrib.data.padded_batch_and_drop_remainder(batch_size, padded_shapes=padded_shapes)
-        )  # make fixed size batches
-
+        padded_shapes = ([3, self.image_height, self.image_width], [None, 4], [None], [], [])
+        #dataset = dataset.apply(
+        #    tf.contrib.data.padded_batch_and_drop_remainder(batch_size, padded_shapes=padded_shapes)
+        #)  # make fixed size batches
+        
+        dataset = dataset.padded_batch(batch_size, padded_shapes).filter(lambda x, y, z, a, b: tf.equal(tf.shape(x)[0], batch_size))
+        self.batch_size = batch_size
         if repeat:
             dataset = dataset.repeat()
 
@@ -58,10 +60,16 @@ class Pipeline:
             num_boxes: an int tensor with shape [batch_size].
                 where max_num_boxes = max(num_boxes).
         """
-        images, boxes, labels, num_boxes = self.iterator.get_next()
+        images, boxes, labels, num_boxes, filenames = self.iterator.get_next()
+        images.set_shape([self.batch_size, 3, self.image_height, self.image_width])
+        boxes.set_shape([self.batch_size, None, 4])
+        labels.set_shape([self.batch_size, None])
+        num_boxes.set_shape([self.batch_size])
+        filenames.set_shape([self.batch_size])
         batch = {
             'images': images, 'boxes': boxes,
-            'labels': labels, 'num_boxes': num_boxes
+            'labels': labels, 'num_boxes': num_boxes,
+            'filenames': filenames
         }
         return batch
 
@@ -78,6 +86,7 @@ class Pipeline:
             num_boxes: an int tensor with shape [].
         """
         features = {
+            'filename': tf.FixedLenFeature([], tf.string),
             'image': tf.FixedLenFeature([], tf.string),
             'ymin': tf.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
             'xmin': tf.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
@@ -112,7 +121,7 @@ class Pipeline:
         )
         image = tf.transpose(image, perm=[2, 0, 1])  # to NCHW format
         num_boxes = tf.to_int32(tf.shape(boxes)[0])
-        return image, boxes, labels, num_boxes
+        return image, boxes, labels, num_boxes, parsed_features['filename']
 
 
 def _augmentation(image, boxes, labels):

@@ -58,7 +58,31 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
             for i, (stride, num_filters) in enumerate(strides_and_filters, 1):
 
                 layer_name = 'Conv2d_%d_depthwise' % i
-                x = slim.separable_conv2d(x, None, (3, 3), depth_multiplier=1, stride=stride, scope=layer_name)
+                #x = slim.separable_conv2d(x, None, (3, 3), depth_multiplier=1, stride=stride, scope=layer_name)
+                x = tf.layers.separable_conv2d(
+                    x,
+                    10,
+                    (3, 3),
+                    strides=stride,
+                    padding='same',
+                    data_format='channels_first',
+                    dilation_rate=(1, 1),
+                    depth_multiplier=1,
+                    activation=tf.nn.relu6,
+                    use_bias=True,
+                    depthwise_initializer=None,
+                    pointwise_initializer=None,
+                    bias_initializer=tf.zeros_initializer(),
+                    depthwise_regularizer=None,
+                    pointwise_regularizer=None,
+                    bias_regularizer=None,
+                    activity_regularizer=None,
+                    depthwise_constraint=None,
+                    pointwise_constraint=None,
+                    bias_constraint=None,
+                    trainable=True,
+                    name=None,
+                    reuse=None)
                 features[layer_name] = x
 
                 layer_name = 'Conv2d_%d_pointwise' % i

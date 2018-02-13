@@ -16,7 +16,13 @@ def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, thr
         matches: an int tensor with shape [num_anchors].
     """
     with tf.name_scope('matching'):
-        matches = _match(anchors, groundtruth_boxes, threshold)
+        N = tf.shape(groundtruth_boxes)[0]
+        num_anchors = anchors.shape[0]
+        matches = tf.cond(
+            tf.greater(N, 0),
+            lambda: _match(anchors, groundtruth_boxes, threshold), 
+            lambda: -1 * tf.ones([num_anchors], dtype=tf.int32)
+        )
 
     with tf.name_scope('training_target_creation'):
         reg_targets, cls_targets = _create_targets(
@@ -93,16 +99,18 @@ def _create_targets(anchors, groundtruth_boxes, groundtruth_labels, matches, num
     num_anchors = anchors.shape[0]
 
     matched_anchor_indices = tf.where(tf.greater_equal(matches, 0))  # shape [num_matches, 1]
-    matched_anchor_indices = tf.squeeze(matched_anchor_indices)
-    matched_anchor_indices.set_shape([None])
+    matched_anchor_indices = tf.squeeze(matched_anchor_indices, axis=1)
+    #print(matched_anchor_indices)
+    #matched_anchor_indices.set_shape([None])
     matched_gt_indices = tf.gather(matches, matched_anchor_indices)  # shape [num_matches]
 
     matched_anchors = tf.gather(anchors, matched_anchor_indices)  # shape [num_matches, 4]
     matched_gt_boxes = tf.gather(groundtruth_boxes, matched_gt_indices)  # shape [num_matches, 4]
+    #matched_gt_boxes = tf.Print(matched_gt_boxes, [matched_gt_boxes, matched_anchors])
     matched_reg_targets = encode(matched_gt_boxes, matched_anchors)  # shape [num_matches, 4]
 
     unmatched_anchor_indices = tf.where(tf.equal(matches, -1))
-    unmatched_anchor_indices = tf.squeeze(unmatched_anchor_indices)
+    unmatched_anchor_indices = tf.squeeze(unmatched_anchor_indices, axis=1)
     # it has shape [num_anchors - num_matches]
 
     unmatched_reg_targets = tf.zeros([tf.size(unmatched_anchor_indices), 4])
@@ -119,7 +127,7 @@ def _create_targets(anchors, groundtruth_boxes, groundtruth_labels, matches, num
     matched_cls_targets = tf.gather(groundtruth_labels, matched_gt_indices)
     # it has shape [num_matches, num_classes]
 
-    matched_cls_targets = tf.pad(matched_cls_targets, [[0, 0], [1, 0]])
+    matched_cls_targets = tf.pad(matched_cls_targets, tf.constant([[0, 0], [1, 0]]))
     # it has shape [num_matches, num_classes + 1]
 
     # one-hot encoding for background class

@@ -11,7 +11,8 @@ class SSD:
 
         feature_maps = feature_extractor(images)
         self.num_classes = num_classes
-        self.anchors = anchor_generator.generate(feature_maps)
+        h, w = images.shape.as_list()[2:]
+        self.anchors = anchor_generator(feature_maps, w/h)
         self.num_basis_anchors = anchor_generator.num_basis_anchors
         self._add_box_predictions(feature_maps)
 

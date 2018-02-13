@@ -14,10 +14,10 @@ a folder of annotations. Annotations are in the json format.
 
 Example of use:
 python create_tfrecords.py \
-    --image_dir=/home/gpu1/dataset/dataai/BBA_000/images_val/ \
-    --annotations_dir=/home/gpu1/dataset/dataai/BBA_000/annotations_val/ \
-    --output_path=data/val.tfrecords \
-    --label_map_path=data/datai_label_map.pbtxt
+    --image_dir=/home/dan/datasets/datai/BBA_000/images_val/ \
+    --annotations_dir=/home/dan/datasets/datai/BBA_000/annotations_val/ \
+    --output=data/val.tfrecords \
+    --labels=data/labels.txt
 """
 
 
@@ -51,7 +51,8 @@ def dict_to_tf_example(annotation, image_dir, labels):
     Returns:
         an instance of tf.Example.
     """
-    image_path = os.path.join(image_dir, annotation['filename'])
+    image_name = annotation['filename']
+    image_path = os.path.join(image_dir, image_name)
     with tf.gfile.GFile(image_path, 'rb') as f:
         encoded_jpg = f.read()
 
@@ -66,7 +67,7 @@ def dict_to_tf_example(annotation, image_dir, labels):
     assert width > 0 and height > 0
     ymin, xmin, ymax, xmax, classes = [], [], [], [], []
 
-    annotation_name = annotation['filename'][:-4] + '.json'
+    annotation_name = image_name[:-4] + '.json'
     if len(annotation['object']) == 0:
         print(annotation_name, 'is without any objects!')
 
@@ -82,6 +83,7 @@ def dict_to_tf_example(annotation, image_dir, labels):
             sys.exit(1)
 
     example = tf.train.Example(features=tf.train.Features(feature={
+        'filename': _bytes_feature(image_name.encode()),
         'image': _bytes_feature(encoded_jpg),
         'xmin': _float_list_feature(xmin),
         'xmax': _float_list_feature(xmax),
@@ -108,7 +110,7 @@ def main():
     ARGS = make_args()
 
     with open(ARGS.labels, 'r') as f:
-        labels = {line.strip(): i for i, line in enumerate(f.readlines())}
+        labels = {line.strip(): i for i, line in enumerate(f.readlines()) if line.strip()}
     assert len(labels) > 0
     print('Possible labels:', labels)
 
@@ -128,6 +130,7 @@ def main():
         num_examples += 1
 
     writer.close()
+    print('Result is here:', ARGS.output)
 
 
 main()
