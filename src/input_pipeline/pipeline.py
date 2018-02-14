@@ -30,7 +30,7 @@ class Pipeline:
         dataset = dataset.map(
             self._parse_and_preprocess,
             num_parallel_calls=NUM_THREADS
-        ).prefetch(PREFETCH_BUFFER_SIZE)
+        )
 
         if shuffle:
             dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
@@ -45,7 +45,7 @@ class Pipeline:
 
         if repeat:
             dataset = dataset.repeat()
-
+        dataset = dataset.prefetch(PREFETCH_BUFFER_SIZE)
         self.iterator = tf.data.Iterator.from_structure(
             dataset.output_types,
             dataset.output_shapes

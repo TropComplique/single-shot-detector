@@ -63,8 +63,8 @@ class Evaluator:
         return result
 
     def clear(self):
-        self.detections_by_label = {label: [] for label in range(num_classes)}
-        self.groundtruth_by_label_by_image = {label: {} for label in range(num_classes)}
+        self.detections_by_label = {label: [] for label in range(self.num_classes)}
+        self.groundtruth_by_label_by_image = {label: {} for label in range(self.num_classes)}
 
     def get_metric_ops(self, images, groundtruth, predictions):
 
@@ -80,13 +80,13 @@ class Evaluator:
 
         def get_value_func(label):
             def value_func():
-                result = self.evaluator.evaluate()
+                result = self.evaluate()
                 self.clear()
                 return np.float32(result[label]['ap'])
             return value_func
 
         eval_metric_ops = {
-            'ap_' + str(label): (tf.py_func(get_value_func(label), [], [tf.float32]), update_op)
+            'ap_' + str(label): (tf.py_func(get_value_func(label), [], tf.float32), update_op)
             for label in range(self.num_classes)
         }
         return eval_metric_ops

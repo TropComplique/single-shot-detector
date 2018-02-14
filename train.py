@@ -18,7 +18,8 @@ def get_input_fn(is_training=True):
             repeat=is_training, shuffle=is_training,
             augmentation=is_training
         )
-        features, labels = pipeline.get_batch()
+        with tf.device('/cpu:0'):
+            features, labels = pipeline.get_batch()
         iterator_initializer_hook.iterator_initializer_func = lambda sess: sess.run(pipeline.init)
         return features, labels
 
@@ -26,7 +27,7 @@ def get_input_fn(is_training=True):
 
 
 params = {
-    'depth_multiplier': 1.0,
+    'depth_multiplier': 0.5,
     'num_classes': 1, 'weight_decay': 1e-5,
 
     # for anchor generator
@@ -36,7 +37,7 @@ params = {
     'reduce_boxes_in_lowest_layer': False,
 
     # for final NMS
-    'score_threshold': 0.1, 'iou_threshold': 0.6, 'max_boxes_per_class': 40.01, 0.005, 0.001, 0.00050,
+    'score_threshold': 0.1, 'iou_threshold': 0.6, 'max_boxes_per_class': 40,
 
     # for final loss
     'localization_loss_weight': 1.0, 'classification_loss_weight': 1.0,
@@ -44,15 +45,28 @@ params = {
     # for OHEM
     'loc_loss_weight': 0.0, 'cls_loss_weight': 1.0,
     'num_hard_examples': 3000, 'nms_threshold': 0.99,
-    'max_negatives_per_positive': 3.0, 'min_negatives_per_image': 0
+    'max_negatives_per_positive': 3.0, 'min_negatives_per_image': 0,
 
     # for tf.train.piecewise_constant
     'lr_boundaries': [1500, 8000, 15000], 'lr_values': [0.01, 0.005, 0.001, 0.0005]
 }
 
+config = tf.ConfigProto()
+config.gpu_options.visible_device_list= '0'
+
+run_config = tf.estimator.RunConfig()
+run_config = run_config.replace(
+    model_dir='model', 
+    session_config=config,
+    save_summary_steps=100,
+    save_checkpoints_secs=300
+)
+
 train_input_fn, train_iterator_initializer_hook = get_input_fn(is_training=True)
 val_input_fn, val_iterator_initializer_hook = get_input_fn(is_training=False)
-estimator = tf.estimator.Estimator(model_fn, model_dir='model', params=params)
+estimator = tf.estimator.Estimator(model_fn, params=params, config=run_config)
+
+
 
 train_spec = tf.estimator.TrainSpec(
     train_input_fn, max_steps=10000,

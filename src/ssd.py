@@ -93,7 +93,7 @@ class SSD:
 
         cls_targets, reg_targets, matches = self._create_targets(groundtruth)
 
-        with tf.name_scope('loss'):
+        with tf.name_scope('losses'):
             weights = tf.to_float(tf.greater_equal(matches, 0))
             matches_per_image = tf.reduce_sum(weights, axis=1)  # shape [batch_size]
             tf.summary.scalar('mean_matches_per_image', tf.reduce_mean(matches_per_image))

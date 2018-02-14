@@ -79,7 +79,7 @@ def _depthwise_conv(x, kernel=3, strides=1, padding='SAME', trainable=True):
 
     in_channels = x.shape.as_list()[1]
     W = tf.get_variable(
-        'weights', [kernel, kernel, in_channels, 1],
+        'depthwise_weights', [kernel, kernel, in_channels, 1],
         tf.float32, trainable=trainable
     )
 

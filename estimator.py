@@ -5,7 +5,7 @@ from src.backbones import mobilenet_v1_base
 from evaluation_utils import Evaluator
 
 
-def model_fn(features, labels, mode, params):
+def model_fn(features, labels, mode, params, config):
 
     # the base network
     def backbone(images, is_training):
@@ -27,7 +27,8 @@ def model_fn(features, labels, mode, params):
 
     # add box/label predictors to the feature extractor
     ssd = SSD(features['images'], feature_extractor, anchor_generator, params['num_classes'])
-
+    tf.train.init_from_checkpoint('pretrained/mobilenet_v1_0.50_224.ckpt', {'MobilenetV1/': 'MobilenetV1/'})
+    
     if not is_training:
         predictions = ssd.get_predictions(
             score_threshold=params['score_threshold'],
@@ -47,6 +48,7 @@ def model_fn(features, labels, mode, params):
     tf.losses.add_loss(params['localization_loss_weight'] * losses['localization_loss'])
     tf.losses.add_loss(params['classification_loss_weight'] * losses['classification_loss'])
     total_loss = tf.losses.get_total_loss(add_regularization_losses=True)
+    # tf.summary.scalar('total_loss', total_loss)
 
     tf.summary.scalar('regularization_loss', regularization_loss)
     tf.summary.scalar('localization_loss', losses['localization_loss'])
@@ -59,7 +61,7 @@ def model_fn(features, labels, mode, params):
 
     assert mode == tf.estimator.ModeKeys.TRAIN
 
-    global_step = tf.train.create_global_step()
+    global_step = tf.train.get_global_step()
     with tf.variable_scope('learning_rate'):
         learning_rate = tf.train.piecewise_constant(global_step, params['lr_boundaries'], params['lr_values'])
         tf.summary.scalar('learning_rate', learning_rate)
@@ -69,19 +71,14 @@ def model_fn(features, labels, mode, params):
         optimizer = tf.train.RMSPropOptimizer(
             learning_rate, decay=0.9, momentum=0.9
         )
-        grads_and_vars = optimizer.compute_gradients(total_loss)
+        grads_and_vars = optimizer.compute_gradients(total_loss, var_list=None)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)
 
     for g, v in grads_and_vars:
         tf.summary.histogram(v.name[:-2] + '_hist', v)
         tf.summary.histogram(v.name[:-2] + '_grad_hist', g)
 
-    summary_hook = tf.train.SummarySaverHook(
-        save_secs=120,
-        output_dir='model/',
-        summary_op=tf.summary.merge_all()
-    )
-    return tf.estimator.EstimatorSpec(mode, loss=total_loss, train_op=train_op, training_hooks=[summary_hook])
+    return tf.estimator.EstimatorSpec(mode, loss=total_loss, train_op=train_op)
 
 
 class IteratorInitializerHook(tf.train.SessionRunHook):
