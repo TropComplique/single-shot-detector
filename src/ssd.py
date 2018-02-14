@@ -92,38 +92,42 @@ class SSD:
         """
 
         cls_targets, reg_targets, matches = self._create_targets(groundtruth)
-        # with tf.name_scope('loss'):
-        weights = tf.to_float(tf.greater_equal(matches, 0))
-        matches_per_image = tf.reduce_sum(weights, axis=1)  # shape [batch_size]
-        tf.summary.scalar('mean_matches_per_image', tf.reduce_mean(matches_per_image))
-        num_matches = tf.reduce_sum(matches_per_image)  # shape []
 
-        cls_losses = classification_loss(
-            self.class_predictions_with_background, 
-            cls_targets, weights
-        )
-        location_losses = localization_loss(
-            self.box_encodings,
-            reg_targets, weights
-        )
-        # they have shape [batch_size, num_anchors]
-        
-        tf.summary.histogram('all_classification_losses', cls_losses)
-        tf.summary.histogram('all_localization_losses', location_losses)
+        with tf.name_scope('loss'):
+            weights = tf.to_float(tf.greater_equal(matches, 0))
+            matches_per_image = tf.reduce_sum(weights, axis=1)  # shape [batch_size]
+            tf.summary.scalar('mean_matches_per_image', tf.reduce_mean(matches_per_image))
+            num_matches = tf.reduce_sum(matches_per_image)  # shape []
 
-        location_loss, cls_loss = apply_hard_mining(
-            location_losses, cls_losses, 
-            self.class_predictions_with_background,
-            self.box_encodings, matches, self.anchors,
-            loc_loss_weight=params['loc_loss_weight'], 
-            cls_loss_weight=params['cls_loss_weight'],
-            num_hard_examples=params['num_hard_examples'], 
-            nms_threshold=params['nms_threshold'],
-            max_negatives_per_positive=params['max_negatives_per_positive'], 
-            min_negatives_per_image=params['min_negatives_per_image']
-        )
-        normalizer = tf.maximum(num_matches, 1.0)
-        return {'localization_loss': location_loss/normalizer, 'classification_loss': cls_loss/normalizer}
+            with tf.name_scope('classification_loss'):
+                cls_losses = classification_loss(
+                    self.class_predictions_with_background,
+                    cls_targets, weights
+                )
+            with tf.name_scope('localization_loss'):
+                location_losses = localization_loss(
+                    self.box_encodings,
+                    reg_targets, weights
+                )
+            # they have shape [batch_size, num_anchors]
+
+            tf.summary.histogram('all_classification_losses', cls_losses)
+            tf.summary.histogram('all_localization_losses', location_losses)
+
+            with tf.name_scope('ohem'):
+                location_loss, cls_loss = apply_hard_mining(
+                    location_losses, cls_losses,
+                    self.class_predictions_with_background,
+                    self.box_encodings, matches, self.anchors,
+                    loc_loss_weight=params['loc_loss_weight'],
+                    cls_loss_weight=params['cls_loss_weight'],
+                    num_hard_examples=params['num_hard_examples'],
+                    nms_threshold=params['nms_threshold'],
+                    max_negatives_per_positive=params['max_negatives_per_positive'],
+                    min_negatives_per_image=params['min_negatives_per_image']
+                )
+            normalizer = tf.maximum(num_matches, 1.0)
+            return {'localization_loss': location_loss/normalizer, 'classification_loss': cls_loss/normalizer}
 
     def _create_targets(self, groundtruth):
         """
@@ -153,19 +157,3 @@ class SSD:
             back_prop=False, swap_memory=False, infer_shape=True
         )
         return cls_targets, reg_targets, matches
-
-
-def add_weight_decay(weight_decay):
-    """Add L2 regularization to all (or some) trainable kernel weights."""
-
-    weight_decay = tf.constant(
-        weight_decay, tf.float32,
-        [], 'weight_decay'
-    )
-
-    trainable_vars = tf.trainable_variables()
-    kernels = [v for v in trainable_vars if 'weights' in v.name]
-    
-    for K in kernels:
-        x = tf.multiply(weight_decay, tf.nn.l2_loss(K))
-        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, x)

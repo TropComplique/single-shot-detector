@@ -70,7 +70,7 @@ def apply_hard_mining(
 
     decoded_boxes = batch_decode(box_encodings, anchors)
     # it has shape [batch_size, num_anchors, 4]
-    
+
     # all these tensors must have static first dimension (batch size)
     decoded_boxes_list = tf.unstack(decoded_boxes, axis=0)
     class_predictions_list = tf.unstack(class_predictions, axis=0)
@@ -102,7 +102,7 @@ def apply_hard_mining(
         mined_cls_losses.append(
             tf.reduce_sum(tf.gather(cls_losses_list[i], selected_indices))
         )
-    
+
     mean_num_positives = tf.reduce_mean(tf.stack(num_positives_list, axis=0))
     mean_num_negatives = tf.reduce_mean(tf.stack(num_negatives_list, axis=0))
     tf.summary.scalar('mean_num_positives', mean_num_positives)

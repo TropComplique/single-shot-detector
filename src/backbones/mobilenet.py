@@ -78,7 +78,6 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
 def _depthwise_conv(x, kernel=3, strides=1, padding='SAME', trainable=True):
 
     in_channels = x.shape.as_list()[1]
-
     W = tf.get_variable(
         'weights', [kernel, kernel, in_channels, 1],
         tf.float32, trainable=trainable

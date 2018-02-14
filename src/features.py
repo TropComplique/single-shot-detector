@@ -21,7 +21,11 @@ class FeatureExtractor:
         """
 
         x, feature_maps = self.backbone(images, self.is_training)
-        image_features = [feature_maps['Conv2d_11_pointwise'], feature_maps['Conv2d_13_pointwise']]
+        image_features = [
+            feature_maps['Conv2d_9_pointwise'],
+            feature_maps['Conv2d_11_pointwise'],
+            feature_maps['Conv2d_13_pointwise']
+        ]
 
         def batch_norm(x):
             x = slim.batch_norm(
@@ -31,7 +35,7 @@ class FeatureExtractor:
             )
             return x
 
-        filters = [256, 128, 128, 64]
+        filters = [192, 192, 96, 96]
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,

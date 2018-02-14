@@ -107,12 +107,12 @@ def tile_anchors(image_aspect_ratio, grid_height, grid_width, scales, aspect_rat
     """
     N = tf.size(scales)
     ratio_sqrts = tf.sqrt(aspect_ratios)
-    heights = (scales / ratio_sqrts) * image_aspect_ratio
-    widths = scales * ratio_sqrts
+    heights = (scales / ratio_sqrts) * tf.sqrt(image_aspect_ratio)
+    widths = (scales * ratio_sqrts) / tf.sqrt(image_aspect_ratio)
     # assume that size(image) = (original_width, original_height) then it must be that
-    # image_aspect_ratio = original_widths/original_height, and
-    # (widths * original_widths)/(heights * original_height) = aspect_ratios, and
-    # scales = sqrt((heights * widths)/image_aspect_ratio)
+    # image_aspect_ratio = original_width/original_height, and
+    # (widths * original_width)/(heights * original_height) = aspect_ratios, and
+    # scales = sqrt(heights * widths)
 
     # get a grid of box centers
     y_centers = tf.to_float(tf.range(grid_height))
