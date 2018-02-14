@@ -50,8 +50,7 @@ def apply_hard_mining(
         location_losses: a float tensor with shape [batch_size, num_anchors].
         cls_losses: a float tensor with shape [batch_size, num_anchors].
         box_encodings: a float tensor with shape [batch_size, num_anchors, 4].
-        class_predictions_with_background: a float tensor with shape
-            [batch_size, num_anchors, num_classes + 1].
+        class_predictions_with_background: a float tensor with shape [batch_size, num_anchors, num_classes + 1].
         matches: an int tensor with shape [batch_size, num_anchors].
         anchors: a float tensor with shape [num_anchors, 4].
         loc_loss_weight:
@@ -61,10 +60,7 @@ def apply_hard_mining(
         max_negatives_per_positive:
         min_negatives_per_image:
     Returns:
-        location_loss: a float scalar with sum of localization losses from
-            selected hard examples.
-        cls_loss: a float scalar with sum of classification losses from
-            selected hard examples.
+        two float tensors with shape [].
     """
     # remove probabilities for background
     class_predictions = tf.slice(
@@ -74,7 +70,8 @@ def apply_hard_mining(
 
     decoded_boxes = batch_decode(box_encodings, anchors)
     # it has shape [batch_size, num_anchors, 4]
-
+    
+    # all these tensors must have static first dimension (batch size)
     decoded_boxes_list = tf.unstack(decoded_boxes, axis=0)
     class_predictions_list = tf.unstack(class_predictions, axis=0)
     location_losses_list = tf.unstack(location_losses, axis=0)
@@ -83,10 +80,8 @@ def apply_hard_mining(
     # they all lists with length = batch_size
 
     batch_size = len(decoded_boxes_list)
-    num_positives_list = []
-    num_negatives_list = []
-    mined_location_losses = []
-    mined_cls_losses = []
+    num_positives_list, num_negatives_list = [], []
+    mined_location_losses, mined_cls_losses = [], []
 
     for i, box_locations in enumerate(decoded_boxes_list):
         image_losses = cls_losses_list[i] * cls_loss_weight + location_losses_list[i] * loc_loss_weight
@@ -107,6 +102,11 @@ def apply_hard_mining(
         mined_cls_losses.append(
             tf.reduce_sum(tf.gather(cls_losses_list[i], selected_indices))
         )
+    
+    mean_num_positives = tf.reduce_mean(tf.stack(num_positives_list, axis=0))
+    mean_num_negatives = tf.reduce_mean(tf.stack(num_negatives_list, axis=0))
+    tf.summary.scalar('mean_num_positives', mean_num_positives)
+    tf.summary.scalar('mean_num_negatives', mean_num_negatives)
 
     location_loss = tf.reduce_sum(tf.stack(mined_location_losses, axis=0))
     cls_loss = tf.reduce_sum(tf.stack(mined_cls_losses, axis=0))

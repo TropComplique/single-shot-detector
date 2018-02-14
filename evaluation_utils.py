@@ -66,7 +66,7 @@ class Evaluator:
         self.detections_by_label = {label: [] for label in range(num_classes)}
         self.groundtruth_by_label_by_image = {label: {} for label in range(num_classes)}
 
-    def get_estimator_eval_metric_ops(self, images, groundtruth, predictions):
+    def get_metric_ops(self, images, groundtruth, predictions):
 
         def update_op(images, g_boxes, g_labels, g_num_boxes, boxes, labels, scores, num_boxes):
             self.add_groundtruth(images, g_boxes, g_labels, g_num_boxes)

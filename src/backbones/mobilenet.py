@@ -44,7 +44,9 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
         }
         with slim.arg_scope([slim.conv2d, slim.separable_conv2d], **params):
             features = {}
-            x = preprocess(images)
+
+            with tf.name_scope('standardize_input'):
+                x = preprocess(images)
 
             layer_name = 'Conv2d_0'
             x = slim.conv2d(x, depth(32), (3, 3), stride=2, scope=layer_name)
@@ -81,11 +83,7 @@ def _depthwise_conv(x, kernel=3, strides=1, padding='SAME', trainable=True):
         'weights', [kernel, kernel, in_channels, 1],
         tf.float32, trainable=trainable
     )
-    b = tf.get_variable(
-        'bias', [in_channels],
-        tf.float32, trainable=trainable
-    )
 
-    x = tf.nn.depthwise_conv2d(x, W, [1, strides, strides, 1], padding, data_format=DATA_FORMAT)
-    x = tf.nn.bias_add(x, b, data_format=DATA_FORMAT)
+    # why not [1, strides, strides, 1] ?
+    x = tf.nn.depthwise_conv2d(x, W, [1, 1, strides, strides], padding, data_format=DATA_FORMAT)
     return x

@@ -16,3 +16,6 @@ NUM_THREADS = 4
 
 RESIZE_METHOD = tf.image.ResizeMethod.NEAREST_NEIGHBOR
 MATCHING_THRESHOLD = 0.5
+
+# for tf.map_fn when creating training targets or doing nms
+PARALLEL_ITERATIONS = 10

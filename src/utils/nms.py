@@ -1,4 +1,5 @@
 import tensorflow as tf
+from src.constants import PARALLEL_ITERATIONS
 
 
 def multiclass_non_max_suppression(
@@ -87,12 +88,9 @@ def batch_multiclass_non_max_suppression(
         return boxes, scores, classes, num_boxes
 
     boxes, scores, classes, num_detections = tf.map_fn(
-        fn,
-        [boxes, scores],
+        fn, [boxes, scores],
         dtype=(tf.float32, tf.float32, tf.int32, tf.int32),
-        parallel_iterations=10,
-        back_prop=False,
-        swap_memory=False,
-        infer_shape=True
+        parallel_iterations=PARALLEL_ITERATIONS,
+        back_prop=False, swap_memory=False, infer_shape=True
     )
     return boxes, scores, classes, num_detections

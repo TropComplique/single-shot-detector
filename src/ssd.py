@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-from .constants import MATCHING_THRESHOLD
+from .constants import MATCHING_THRESHOLD, PARALLEL_ITERATIONS
 from .utils import batch_multiclass_non_max_suppression, batch_decode
 from .training_target_creation import get_targets
 from .losses import localization_loss, classification_loss, apply_hard_mining
@@ -76,10 +76,9 @@ class SSD:
                 score_threshold, iou_threshold,
                 max_boxes_per_class, self.num_classes
             )
-            predictions = {'boxes': boxes, 'labels': classes, 'scores': scores, 'num_boxes': num_detections}
-            return predictions
+            return {'boxes': boxes, 'labels': classes, 'scores': scores, 'num_boxes': num_detections}
 
-    def loss(self, boxes, labels, num_boxes):
+    def loss(self, groundtruth, params):
         """Compute scalar loss tensors with respect to provided groundtruth.
 
         Arguments:
@@ -92,36 +91,41 @@ class SSD:
             which contains float tensors with shape [].
         """
 
-        cls_targets, reg_targets, matches = self._create_targets(boxes, labels, num_boxes)
+        cls_targets, reg_targets, matches = self._create_targets(groundtruth)
+        # with tf.name_scope('loss'):
+        weights = tf.to_float(tf.greater_equal(matches, 0))
+        matches_per_image = tf.reduce_sum(weights, axis=1)  # shape [batch_size]
+        tf.summary.scalar('mean_matches_per_image', tf.reduce_mean(matches_per_image))
+        num_matches = tf.reduce_sum(matches_per_image)  # shape []
 
-        match_indicator = tf.greater_equal(matches, 0)
-        weights = tf.to_float(match_indicator)
-        num_matches = tf.reduce_sum(weights)  # shape []
-
+        cls_losses = classification_loss(
+            self.class_predictions_with_background, 
+            cls_targets, weights
+        )
         location_losses = localization_loss(
             self.box_encodings,
-            reg_targets,
-            weights
-        )  # shape: [batch_size, num_anchors]
-        cls_losses = classification_loss(
-            self.class_predictions_with_background,
-            cls_targets,
-            weights
-        )  # shape: [batch_size, num_anchor]
+            reg_targets, weights
+        )
+        # they have shape [batch_size, num_anchors]
+        
+        tf.summary.histogram('all_classification_losses', cls_losses)
+        tf.summary.histogram('all_localization_losses', location_losses)
 
         location_loss, cls_loss = apply_hard_mining(
-            location_losses, cls_losses, self.class_predictions_with_background,
-            self.box_encodings, matches, self.anchors
+            location_losses, cls_losses, 
+            self.class_predictions_with_background,
+            self.box_encodings, matches, self.anchors,
+            loc_loss_weight=params['loc_loss_weight'], 
+            cls_loss_weight=params['cls_loss_weight'],
+            num_hard_examples=params['num_hard_examples'], 
+            nms_threshold=params['nms_threshold'],
+            max_negatives_per_positive=params['max_negatives_per_positive'], 
+            min_negatives_per_image=params['min_negatives_per_image']
         )
-
         normalizer = tf.maximum(num_matches, 1.0)
-        localization_loss_weight = 1.0
-        classification_loss_weight = 1.0
-        location_loss = (localization_loss_weight / normalizer) * location_loss
-        cls_loss = (classification_loss_weight / normalizer) * cls_loss
-        return location_loss + cls_loss
+        return {'localization_loss': location_loss/normalizer, 'classification_loss': cls_loss/normalizer}
 
-    def _create_targets(self, boxes, labels, num_boxes):
+    def _create_targets(self, groundtruth):
         """
         Arguments:
             boxes: a float tensor with shape [batch_size, N, 4].
@@ -143,12 +147,25 @@ class SSD:
             return cls_targets, reg_targets, matches
 
         cls_targets, reg_targets, matches = tf.map_fn(
-            fn,
-            [boxes, labels, num_boxes],
+            fn, [groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes']],
             dtype=(tf.float32, tf.float32, tf.int32),
-            parallel_iterations=10,
-            back_prop=False,
-            swap_memory=False,
-            infer_shape=True
+            parallel_iterations=PARALLEL_ITERATIONS,
+            back_prop=False, swap_memory=False, infer_shape=True
         )
         return cls_targets, reg_targets, matches
+
+
+def add_weight_decay(weight_decay):
+    """Add L2 regularization to all (or some) trainable kernel weights."""
+
+    weight_decay = tf.constant(
+        weight_decay, tf.float32,
+        [], 'weight_decay'
+    )
+
+    trainable_vars = tf.trainable_variables()
+    kernels = [v for v in trainable_vars if 'weights' in v.name]
+    
+    for K in kernels:
+        x = tf.multiply(weight_decay, tf.nn.l2_loss(K))
+        tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, x)
