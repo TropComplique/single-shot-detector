@@ -10,15 +10,15 @@ class Pipeline:
     """Input pipeline for training or evaluating object detectors."""
 
     def __init__(self, filename, batch_size, image_size,
-                 repeat=False, shuffle=False, augmentation=False):
+                 repeat=False, shuffle=False, augmentation=None):
         """
         Arguments:
             filename: a string, a path to a tfrecords file.
             batch_size: an integer.
-            image_size: a tuple of two integers (width, height),
+            image_size: a list with two integers [width, height],
                 images of this size will be in a batch.
             shuffle: whether to shuffle the dataset.
-            augmentation: whether to do data augmentation.
+            augmentation: a dict with parameters or None.
         """
         self.image_width, self.image_height = image_size
         self.augmentation = augmentation
@@ -27,6 +27,7 @@ class Pipeline:
         assert self.num_examples > 0
 
         dataset = tf.data.TFRecordDataset(filename)
+        dataset = dataset.repeat(1 if not repeat else None)
         dataset = dataset.map(
             self._parse_and_preprocess,
             num_parallel_calls=NUM_THREADS
@@ -42,10 +43,8 @@ class Pipeline:
         # )
         is_full_batch = lambda x1, x2, x3, x4, x5: tf.equal(tf.shape(x1)[0], batch_size)
         dataset = dataset.padded_batch(batch_size, padded_shapes).filter(is_full_batch)
-
-        if repeat:
-            dataset = dataset.repeat()
         dataset = dataset.prefetch(PREFETCH_BUFFER_SIZE)
+
         self.iterator = tf.data.Iterator.from_structure(
             dataset.output_types,
             dataset.output_shapes
@@ -113,8 +112,8 @@ class Pipeline:
         boxes = tf.to_float(boxes)
         boxes = tf.clip_by_value(boxes, clip_value_min=0.0, clip_value_max=1.0)
 
-        if self.augmentation:
-            image, boxes, labels = _augmentation(image, boxes, labels)
+        if self.augmentation is not None:
+            image, boxes, labels = self._augmentation_fn(image, boxes, labels)
 
         image = tf.image.resize_images(
             image, [self.image_height, self.image_width],
@@ -125,12 +124,29 @@ class Pipeline:
         filename = parsed_features['filename']
         return image, boxes, labels, num_boxes, filename
 
+    def _augmentation_fn(self, image, boxes, labels):
+        params = self.augmentation
 
-def _augmentation(image, boxes, labels):
-    image, boxes, labels = random_image_crop(image, boxes, labels, probability=0.5)
-    image = random_color_manipulations(image, probability=0.5, grayscale_probability=0.1)
-    image, boxes = random_flip_left_right(image, boxes)
-    image = random_pixel_value_scale(image, minval=0.9, maxval=1.1, probability=0.5)
-    boxes = random_jitter_boxes(boxes, ratio=0.05)
-    image = random_black_patches(image, max_black_patches=10, probability=0.5, size_to_image_ratio=0.1)
-    return image, boxes, labels
+        if params['do_random_crop']:
+            image, boxes, labels = random_image_crop(
+                image, boxes, labels, probability=0.5,
+                min_object_covered=0.9,
+                aspect_ratio_range=(0.85, 1.15),
+                area_range=(0.5, 1.0),
+                overlap_thresh=0.2
+            )
+
+        if params['do_random_color_manipulations']:
+            image = random_color_manipulations(image, probability=0.5, grayscale_probability=0.1)
+
+        if params['do_random_pixel_scale']:
+            image = random_pixel_value_scale(image, minval=0.9, maxval=1.1, probability=0.5)
+
+        if params['do_random_jitter_boxes']:
+            boxes = random_jitter_boxes(boxes, ratio=0.05)
+
+        if params['do_random_black_patches']:
+            image = random_black_patches(image, max_black_patches=10, probability=0.5, size_to_image_ratio=0.1)
+
+        image, boxes = random_flip_left_right(image, boxes)
+        return image, boxes, labels

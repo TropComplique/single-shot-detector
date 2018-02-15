@@ -2,14 +2,18 @@ import tensorflow as tf
 from src.utils import area, intersection
 
 
-def random_image_crop(image, boxes, labels, probability=0.5):
+def random_image_crop(
+        image, boxes, labels, probability=0.5,
+        min_object_covered=0.9,
+        aspect_ratio_range=(0.75, 1.33),
+        area_range=(0.5, 1.0),
+        overlap_thresh=0.3):
 
     def crop(image, boxes, labels):
         image, boxes, keep_ids = _random_crop_image(
-            image, boxes, min_object_covered=0.9,
-            aspect_ratio_range=(0.75, 1.33),
-            area_range=(0.5, 1.0),
-            overlap_thresh=0.3
+            image, boxes, min_object_covered,
+            aspect_ratio_range,
+            area_range, overlap_thresh
         )
         labels = tf.gather(labels, keep_ids)
         return image, boxes, labels

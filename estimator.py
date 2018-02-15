@@ -27,8 +27,9 @@ def model_fn(features, labels, mode, params, config):
 
     # add box/label predictors to the feature extractor
     ssd = SSD(features['images'], feature_extractor, anchor_generator, params['num_classes'])
-    tf.train.init_from_checkpoint('pretrained/mobilenet_v1_0.50_224.ckpt', {'MobilenetV1/': 'MobilenetV1/'})
-    
+    if params['pretrained_checkpoint'] is not None:
+        tf.train.init_from_checkpoint(params['pretrained_checkpoint'], {'MobilenetV1/': 'MobilenetV1/'})
+
     if not is_training:
         predictions = ssd.get_predictions(
             score_threshold=params['score_threshold'],
