@@ -36,7 +36,7 @@ class SSD:
         for i, x, num_predictions_per_location in zip(range(num_feature_maps), feature_maps, num_basis_anchors):
 
             batch_size = tf.shape(x)[0]
-            _, _, height_i, width_i = x.shape.as_list()
+            height_i, width_i = x.shape.as_list()[2:]
             num_anchors_on_feature_map = height_i * width_i * num_predictions_per_location
 
             y = slim.conv2d(
@@ -87,8 +87,7 @@ class SSD:
             num_boxes: an int tensor with shape [batch_size].
                 where max_num_boxes = max(num_boxes).
         Returns:
-            a dict with two keys ('localization_loss' and 'classification_loss')
-            which contains float tensors with shape [].
+            two float tensors with shape [].
         """
 
         cls_targets, reg_targets, matches = self._create_targets(groundtruth)
@@ -102,7 +101,7 @@ class SSD:
             with tf.name_scope('classification_loss'):
                 cls_losses = classification_loss(
                     self.class_predictions_with_background,
-                    cls_targets, weights
+                    cls_targets
                 )
             with tf.name_scope('localization_loss'):
                 location_losses = localization_loss(

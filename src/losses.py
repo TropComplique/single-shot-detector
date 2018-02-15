@@ -20,22 +20,20 @@ def localization_loss(predictions, targets, weights):
     )
 
 
-def classification_loss(predictions, targets, weights):
+def classification_loss(predictions, targets):
     """
     Arguments:
         predictions: a float tensor with shape [batch_size, num_anchors, num_classes + 1],
             representing the predicted logits for each class.
         targets: a float tensor with shape [batch_size, num_anchors, num_classes + 1],
             representing one-hot encoded classification targets.
-        weights: a float tensor with shape [batch_size, num_anchors].
     Returns:
         a float tensor with shape [batch_size, num_anchors].
     """
-    weights = tf.expand_dims(weights, 2)  # shape [batch_size, num_anchors, 1]
     cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=targets, logits=predictions
     )
-    return tf.reduce_sum(weights * cross_entropy, axis=2)
+    return tf.reduce_sum(cross_entropy, axis=2)
 
 
 def apply_hard_mining(
@@ -62,18 +60,12 @@ def apply_hard_mining(
     Returns:
         two float tensors with shape [].
     """
-    # remove probabilities for background
-    class_predictions = tf.slice(
-        class_predictions_with_background,
-        [0, 0, 1], [-1, -1, -1]
-    )  # shape [batch_size, num_anchors, num_classes]
 
     decoded_boxes = batch_decode(box_encodings, anchors)
     # it has shape [batch_size, num_anchors, 4]
 
     # all these tensors must have static first dimension (batch size)
     decoded_boxes_list = tf.unstack(decoded_boxes, axis=0)
-    class_predictions_list = tf.unstack(class_predictions, axis=0)
     location_losses_list = tf.unstack(location_losses, axis=0)
     cls_losses_list = tf.unstack(cls_losses, axis=0)
     matches_list = tf.unstack(matches, axis=0)

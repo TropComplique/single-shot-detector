@@ -24,10 +24,10 @@
     "image_size": [640, 360],
     "batch_size": 24,
 
-    "do_random_crop": true,
-    "do_random_color_manipulations": true,
-    "do_random_pixel_scale": true,
-    "do_random_jitter_boxes": true,
-    "do_random_black_patches": true
+    "do_random_crop": false,
+    "do_random_color_manipulations": false,
+    "do_random_pixel_scale": false,
+    "do_random_jitter_boxes": false,
+    "do_random_black_patches": false
   }
 }

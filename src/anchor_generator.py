@@ -81,6 +81,7 @@ class AnchorGenerator:
         self.num_basis_anchors = [len(layer_box_specs) for layer_box_specs in box_specs_list]
         self.feature_map_shape_list = feature_map_shape_list
         self.num_anchors_per_feature_map = num_anchors_per_feature_map
+        self.anchor_grid_list = anchor_grid_list
 
         anchors = tf.concat(anchor_grid_list, axis=0)
         anchors = tf.clip_by_value(anchors, 0.0, 1.0)

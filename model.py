@@ -27,8 +27,11 @@ def model_fn(features, labels, mode, params, config):
 
     # add box/label predictors to the feature extractor
     ssd = SSD(features['images'], feature_extractor, anchor_generator, params['num_classes'])
+    
+    # use a pretrained backbone network
     if params['pretrained_checkpoint'] is not None:
-        tf.train.init_from_checkpoint(params['pretrained_checkpoint'], {'MobilenetV1/': 'MobilenetV1/'})
+        with tf.name_scope('init_from_checkpoint'):
+            tf.train.init_from_checkpoint(params['pretrained_checkpoint'], {'MobilenetV1/': 'MobilenetV1/'})
 
     if not is_training:
         predictions = ssd.get_predictions(
@@ -57,7 +60,8 @@ def model_fn(features, labels, mode, params, config):
 
     if mode == tf.estimator.ModeKeys.EVAL:
         evaluator = Evaluator(params['num_classes'])
-        eval_metric_ops = evaluator.get_metric_ops(features['filenames'], labels, predictions)
+        with tf.name_scope('evaluator'):
+            eval_metric_ops = evaluator.get_metric_ops(features['filenames'], labels, predictions)
         return tf.estimator.EstimatorSpec(mode, loss=total_loss, eval_metric_ops=eval_metric_ops)
 
     assert mode == tf.estimator.ModeKeys.TRAIN
@@ -70,7 +74,7 @@ def model_fn(features, labels, mode, params, config):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops), tf.variable_scope('optimizer'):
         optimizer = tf.train.RMSPropOptimizer(
-            learning_rate, decay=0.9, momentum=0.9
+            learning_rate, decay=0.9, momentum=0.9, epsilon=1.0
         )
         grads_and_vars = optimizer.compute_gradients(total_loss, var_list=None)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)
@@ -103,7 +107,7 @@ def add_weight_decay(weight_decay):
     )
 
     trainable_vars = tf.trainable_variables()
-    kernels = [v for v in trainable_vars if 'weights' in v.name]
+    kernels = [v for v in trainable_vars if '/weights' in v.name]
 
     for K in kernels:
         x = tf.multiply(weight_decay, tf.nn.l2_loss(K))

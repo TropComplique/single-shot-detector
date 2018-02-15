@@ -68,8 +68,8 @@ class Evaluator:
 
     def get_metric_ops(self, images, groundtruth, predictions):
 
-        def update_op(images, g_boxes, g_labels, g_num_boxes, boxes, labels, scores, num_boxes):
-            self.add_groundtruth(images, g_boxes, g_labels, g_num_boxes)
+        def update_op(images, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
+            self.add_groundtruth(images, gt_boxes, gt_labels, gt_num_boxes)
             self.add_detections(images, boxes, labels, scores, num_boxes)
 
         tensors = [
