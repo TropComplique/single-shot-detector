@@ -12,7 +12,8 @@ class SSD:
 
         feature_maps = feature_extractor(images)
         self.num_classes = num_classes
-        self.anchors = anchor_generator(feature_maps, images)
+        with tf.name_scope('anchor_generator'):
+            self.anchors = anchor_generator(feature_maps, images)
         self.num_basis_anchors = anchor_generator.num_basis_anchors
         self._add_box_predictions(feature_maps)
 
@@ -148,11 +149,12 @@ class SSD:
                 self.num_classes, threshold=MATCHING_THRESHOLD
             )
             return cls_targets, reg_targets, matches
-
-        cls_targets, reg_targets, matches = tf.map_fn(
-            fn, [groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes']],
-            dtype=(tf.float32, tf.float32, tf.int32),
-            parallel_iterations=PARALLEL_ITERATIONS,
-            back_prop=False, swap_memory=False, infer_shape=True
-        )
-        return cls_targets, reg_targets, matches
+        
+        with tf.name_scope('target_creation'):
+            cls_targets, reg_targets, matches = tf.map_fn(
+                fn, [groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes']],
+                dtype=(tf.float32, tf.float32, tf.int32),
+                parallel_iterations=PARALLEL_ITERATIONS,
+                back_prop=False, swap_memory=False, infer_shape=True
+            )
+            return cls_targets, reg_targets, matches

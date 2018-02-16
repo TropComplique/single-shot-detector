@@ -2,6 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 
+# well, you can't change this
 DATA_FORMAT = 'NCHW'
 
 
@@ -28,10 +29,11 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
         return (2.0*images) - 1.0
 
     def batch_norm(x):
-        x = slim.batch_norm(
-            x, center=True, scale=True,
-            decay=0.9997, epsilon=0.001, is_training=is_training,
-            fused=True, data_format=DATA_FORMAT
+        x = tf.layers.batch_normalization(
+            x, axis=1, center=True, scale=True,
+            momentum=0.9, epsilon=0.001, 
+            training=is_training, fused=True,
+            name='BatchNorm'
         )
         return x
 

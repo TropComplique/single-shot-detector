@@ -15,18 +15,18 @@ def get_input_fn(is_training=True):
 
     image_size = input_pipeline_params['image_size']
     iterator_initializer_hook = IteratorInitializerHook()
-    filename = 'data/val.tfrecords' if is_training else 'data/val.tfrecords'
+    filename = 'data/train.tfrecords' if is_training else 'data/val.tfrecords'
     batch_size = input_pipeline_params['batch_size'] if is_training else 24
     augmentation = input_pipeline_params if is_training else None
 
     def input_fn():
-        pipeline = Pipeline(
-            filename,
-            batch_size=batch_size, image_size=image_size,
-            repeat=is_training, shuffle=is_training,
-            augmentation=augmentation
-        )
         with tf.device('/cpu:0'), tf.name_scope('input_pipeline'):
+            pipeline = Pipeline(
+                filename,
+                batch_size=batch_size, image_size=image_size,
+                repeat=is_training, shuffle=is_training,
+                augmentation=augmentation
+            )
             features, labels = pipeline.get_batch()
         iterator_initializer_hook.iterator_initializer_func = lambda sess: sess.run(pipeline.init)
         return features, labels
@@ -61,3 +61,4 @@ eval_spec = tf.estimator.EvalSpec(
     start_delay_secs=300, throttle_secs=300
 )
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+#estimator.evaluate(val_input_fn, hooks=[val_iterator_initializer_hook])

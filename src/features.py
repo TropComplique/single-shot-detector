@@ -2,9 +2,6 @@ import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
 
-DATA_FORMAT = 'NCHW'
-
-
 class FeatureExtractor:
     def __init__(self, backbone, is_training):
         self.backbone = backbone
@@ -28,10 +25,11 @@ class FeatureExtractor:
         ]
 
         def batch_norm(x):
-            x = slim.batch_norm(
-                x, center=True, scale=True,
-                decay=0.9997, epsilon=0.001, is_training=self.is_training,
-                fused=True, data_format=DATA_FORMAT
+            x = tf.layers.batch_normalization(
+                x, axis=1, center=True, scale=True,
+                momentum=0.9, epsilon=0.001, 
+                training=self.is_training, fused=True,
+                name='BatchNorm'
             )
             return x
 
@@ -40,7 +38,7 @@ class FeatureExtractor:
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
             'normalizer_fn': batch_norm,
-            'data_format': DATA_FORMAT
+            'data_format': 'NCHW'
         }
         with slim.arg_scope([slim.conv2d], **params):
             for i, num_filters in enumerate(filters, 14):

@@ -14,20 +14,20 @@
     "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
 
     "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
-    "num_hard_examples": 1000, "nms_threshold": 0.99,
+    "num_hard_examples": 500, "nms_threshold": 0.99,
     "max_negatives_per_positive": 3.0, "min_negatives_per_image": 0,
 
-    "lr_boundaries": [1500, 8000, 15000], "lr_values": [0.01, 0.005, 0.001, 0.0005]
+    "lr_boundaries": [1500, 3000, 5000], "lr_values": [0.01, 0.005, 0.001, 0.0005]
   },
 
   "input_pipeline_params": {
     "image_size": [640, 360],
     "batch_size": 24,
 
-    "do_random_crop": false,
-    "do_random_color_manipulations": false,
-    "do_random_pixel_scale": false,
-    "do_random_jitter_boxes": false,
-    "do_random_black_patches": false
+    "do_random_crop": true,
+    "do_random_color_manipulations": true,
+    "do_random_pixel_scale": true,
+    "do_random_jitter_boxes": true,
+    "do_random_black_patches": true
   }
 }

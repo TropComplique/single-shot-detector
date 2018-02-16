@@ -1,3 +1,5 @@
+import os
+import numpy as np
 import tensorflow as tf
 
 from src import SSD, AnchorGenerator, FeatureExtractor
@@ -52,7 +54,6 @@ def model_fn(features, labels, mode, params, config):
     tf.losses.add_loss(params['localization_loss_weight'] * losses['localization_loss'])
     tf.losses.add_loss(params['classification_loss_weight'] * losses['classification_loss'])
     total_loss = tf.losses.get_total_loss(add_regularization_losses=True)
-    # tf.summary.scalar('total_loss', total_loss)
 
     tf.summary.scalar('regularization_loss', regularization_loss)
     tf.summary.scalar('localization_loss', losses['localization_loss'])
@@ -60,9 +61,19 @@ def model_fn(features, labels, mode, params, config):
 
     if mode == tf.estimator.ModeKeys.EVAL:
         evaluator = Evaluator(params['num_classes'])
+        with tf.name_scope('image_drawer'):
+            image_summary = get_image_visualizer(features['images'], predictions)
+            summary_hook = tf.train.SummarySaverHook(
+                save_steps=10,
+                output_dir=os.path.join(config.model_dir, 'eval'),
+                summary_op=image_summary
+            )
         with tf.name_scope('evaluator'):
             eval_metric_ops = evaluator.get_metric_ops(features['filenames'], labels, predictions)
-        return tf.estimator.EstimatorSpec(mode, loss=total_loss, eval_metric_ops=eval_metric_ops)
+        return tf.estimator.EstimatorSpec(
+            mode, loss=total_loss, eval_metric_ops=eval_metric_ops,
+            evaluation_hooks=[summary_hook]
+        )
 
     assert mode == tf.estimator.ModeKeys.TRAIN
 
@@ -112,3 +123,62 @@ def add_weight_decay(weight_decay):
     for K in kernels:
         x = tf.multiply(weight_decay, tf.nn.l2_loss(K))
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, x)
+
+from PIL import Image, ImageDraw, ImageFont
+def get_image_visualizer(images, predictions, max_outputs=20):
+    images = tf.transpose(images, perm=[0, 2, 3, 1])  # to 'NHWC' format
+    tensors = [
+        images[:max_outputs], 
+        predictions['boxes'][:max_outputs], 
+        predictions['scores'][:max_outputs],
+        predictions['labels'][:max_outputs], 
+        predictions['num_boxes'][:max_outputs]
+    ]
+    def draw_boxes(images, boxes, scores, labels, num_boxes):
+        result = []
+        for i, b, s, n in zip(images, boxes, scores, num_boxes):
+            result.append(draw_boxes_on_image(i, b[:n], s[:n]))
+        return np.stack(result, axis=0)
+    images_with_boxes = tf.py_func(draw_boxes, tensors, tf.uint8, stateful=False)
+    return tf.summary.image('predictions', images_with_boxes, max_outputs)
+    
+    
+    
+def draw_boxes_on_image(image, boxes, scores):
+    image = (255.0*image).astype('uint8')
+    image = Image.fromarray(image)
+    draw = ImageDraw.Draw(image, 'RGBA')
+    width, height = image.size
+    scale = np.array([height, width, height, width], dtype='float')
+    boxes = boxes*scale
+    
+    for box, score in zip(boxes, scores):
+        ymin, xmin, ymax, xmax = box
+        
+        text = str(score)
+        fill = (255, 255, 255, 45)
+        outline = 'red'
+
+        draw.rectangle(
+            [(xmin, ymin), (xmax, ymax)],
+            fill=fill, outline=outline
+        )
+        draw.rectangle(
+            [(xmin, ymin), (xmin + 4*len(text) + 4, ymin + 10)],
+            fill='white', outline='white'
+        )
+        #font = ImageFont.truetype('/usr/share/fonts/truetype/ubuntu-font-family/Ubuntu-B.ttf', size=8)
+        draw.text((xmin + 1, ymin + 1), text, fill='red')
+
+    return np.array(image)
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

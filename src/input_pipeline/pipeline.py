@@ -129,15 +129,15 @@ class Pipeline:
 
         if params['do_random_crop']:
             image, boxes, labels = random_image_crop(
-                image, boxes, labels, probability=0.5,
+                image, boxes, labels, probability=0.9,
                 min_object_covered=0.9,
                 aspect_ratio_range=(0.85, 1.15),
-                area_range=(0.5, 1.0),
+                area_range=(0.4, 1.0),
                 overlap_thresh=0.2
             )
 
         if params['do_random_color_manipulations']:
-            image = random_color_manipulations(image, probability=0.5, grayscale_probability=0.1)
+            image = random_color_manipulations(image, probability=0.8, grayscale_probability=0.1)
 
         if params['do_random_pixel_scale']:
             image = random_pixel_value_scale(image, minval=0.9, maxval=1.1, probability=0.5)
@@ -146,7 +146,7 @@ class Pipeline:
             boxes = random_jitter_boxes(boxes, ratio=0.05)
 
         if params['do_random_black_patches']:
-            image = random_black_patches(image, max_black_patches=10, probability=0.5, size_to_image_ratio=0.1)
+            image = random_black_patches(image, max_black_patches=12, probability=0.5, size_to_image_ratio=0.1)
 
         image, boxes = random_flip_left_right(image, boxes)
         return image, boxes, labels
