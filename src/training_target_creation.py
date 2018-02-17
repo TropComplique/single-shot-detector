@@ -24,7 +24,7 @@ def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, thr
             lambda: -1 * tf.ones([num_anchors], dtype=tf.int32)
         )
 
-    with tf.name_scope('training_target_creation'):
+    with tf.name_scope('reg_and_cls_target_creation'):
         reg_targets, cls_targets = _create_targets(
             anchors, groundtruth_boxes, groundtruth_labels,
             matches, num_classes

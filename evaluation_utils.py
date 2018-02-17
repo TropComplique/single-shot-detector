@@ -25,9 +25,13 @@ class Box:
 
 class Evaluator:
     def __init__(self, num_classes):
-        self.detections_by_label = {label: [] for label in range(num_classes)}
-        self.groundtruth_by_label_by_image = {label: {} for label in range(num_classes)}
         self.num_classes = num_classes
+        self._initialize()
+
+    def _initialize(self):
+        self.detections_by_label = {label: [] for label in range(self.num_classes)}
+        self.groundtruth_by_label_by_image = {label: {} for label in range(self.num_classes)}
+        self.result = None
 
     def add_groundtruth(self, images, boxes, labels, num_boxes):
         batch_size = len(images)
@@ -60,11 +64,10 @@ class Evaluator:
             result[label] = evaluate_detector(
                 groundtruth_by_image, self.detections_by_label[label], iou_threshold
             )
-        return result
+        self.result = result
 
     def clear(self):
-        self.detections_by_label = {label: [] for label in range(self.num_classes)}
-        self.groundtruth_by_label_by_image = {label: {} for label in range(self.num_classes)}
+        self._initialize()
 
     def get_metric_ops(self, images, groundtruth, predictions):
 
@@ -78,15 +81,15 @@ class Evaluator:
         ]
         update_op = tf.py_func(update_op, tensors, [], stateful=True)
 
-        def get_value_func(label):
+        def get_value_func(label, measure='ap'):
             def value_func():
-                result = self.evaluate()
+                self.evaluate()
                 self.clear()
-                return np.float32(result[label]['ap'])
+                return np.float32(self.result[label][measure])
             return value_func
 
         eval_metric_ops = {
-            'ap_' + str(label): (tf.py_func(get_value_func(label), [], tf.float32), update_op)
+            'ap' + '_' + str(label): (tf.py_func(get_value_func(label), [], tf.float32), update_op)
             for label in range(self.num_classes)
         }
         return eval_metric_ops

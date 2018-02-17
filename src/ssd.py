@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-from .constants import MATCHING_THRESHOLD, PARALLEL_ITERATIONS
+from .constants import MATCHING_THRESHOLD, PARALLEL_ITERATIONS, BATCH_NORM_MOMENTUM
 from .utils import batch_multiclass_non_max_suppression, batch_decode
 from .training_target_creation import get_targets
 from .losses import localization_loss, classification_loss, apply_hard_mining
@@ -11,6 +11,7 @@ class SSD:
     def __init__(self, images, feature_extractor, anchor_generator, num_classes):
 
         feature_maps = feature_extractor(images)
+        self.is_training = feature_extractor.is_training
         self.num_classes = num_classes
         with tf.name_scope('anchor_generator'):
             self.anchors = anchor_generator(feature_maps, images)
@@ -46,9 +47,10 @@ class SSD:
                 data_format='NCHW'
             )
             # it has shape [batch_size, num_predictions_per_location * 4, height_i, width_i]
-            y = tf.transpose(y, perm=[0, 2, 3, 1])
-            y = tf.reshape(y, [batch_size, height_i, width_i, num_predictions_per_location, 4])
-            box_encodings.append(tf.reshape(y, [batch_size, num_anchors_on_feature_map, 4]))
+            with tf.name_scope('reshape_predictions_%d' % i):
+                y = tf.transpose(y, perm=[0, 2, 3, 1])
+                y = tf.reshape(y, [batch_size, height_i, width_i, num_predictions_per_location, 4])
+                box_encodings.append(tf.reshape(y, [batch_size, num_anchors_on_feature_map, 4]))
 
             y = slim.conv2d(
                 x, num_predictions_per_location * (num_classes + 1),
@@ -56,12 +58,14 @@ class SSD:
                 data_format='NCHW'
             )
             # it has  shape [batch_size, num_predictions_per_location * (num_classes + 1), height_i, width_i]
-            y = tf.transpose(y, perm=[0, 2, 3, 1])
-            y = tf.reshape(y, [batch_size, height_i, width_i, num_predictions_per_location, num_classes + 1])
-            class_predictions_with_background.append(tf.reshape(y, [batch_size, num_anchors_on_feature_map, num_classes + 1]))
+            with tf.name_scope('reshape_predictions_%d' % i):
+                y = tf.transpose(y, perm=[0, 2, 3, 1])
+                y = tf.reshape(y, [batch_size, height_i, width_i, num_predictions_per_location, num_classes + 1])
+                class_predictions_with_background.append(tf.reshape(y, [batch_size, num_anchors_on_feature_map, num_classes + 1]))
 
-        self.box_encodings = tf.concat(box_encodings, axis=1)
-        self.class_predictions_with_background = tf.concat(class_predictions_with_background, axis=1)
+        with tf.name_scope('concat_predictions'):
+            self.box_encodings = tf.concat(box_encodings, axis=1)
+            self.class_predictions_with_background = tf.concat(class_predictions_with_background, axis=1)
 
     def get_predictions(self, score_threshold=0.1, iou_threshold=0.6, max_boxes_per_class=20):
         with tf.name_scope('postprocessing'):
@@ -149,7 +153,7 @@ class SSD:
                 self.num_classes, threshold=MATCHING_THRESHOLD
             )
             return cls_targets, reg_targets, matches
-        
+
         with tf.name_scope('target_creation'):
             cls_targets, reg_targets, matches = tf.map_fn(
                 fn, [groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes']],

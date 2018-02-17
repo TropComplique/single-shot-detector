@@ -1,5 +1,6 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+from src.constants import BATCH_NORM_MOMENTUM
 
 
 class FeatureExtractor:
@@ -27,7 +28,7 @@ class FeatureExtractor:
         def batch_norm(x):
             x = tf.layers.batch_normalization(
                 x, axis=1, center=True, scale=True,
-                momentum=0.9, epsilon=0.001, 
+                momentum=BATCH_NORM_MOMENTUM, epsilon=0.001,
                 training=self.is_training, fused=True,
                 name='BatchNorm'
             )

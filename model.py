@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import tensorflow as tf
+from PIL import Image, ImageDraw
 
 from src import SSD, AnchorGenerator, FeatureExtractor
 from src.backbones import mobilenet_v1_base
@@ -29,7 +30,7 @@ def model_fn(features, labels, mode, params, config):
 
     # add box/label predictors to the feature extractor
     ssd = SSD(features['images'], feature_extractor, anchor_generator, params['num_classes'])
-    
+
     # use a pretrained backbone network
     if params['pretrained_checkpoint'] is not None:
         with tf.name_scope('init_from_checkpoint'):
@@ -64,8 +65,7 @@ def model_fn(features, labels, mode, params, config):
         with tf.name_scope('image_drawer'):
             image_summary = get_image_visualizer(features['images'], predictions)
             summary_hook = tf.train.SummarySaverHook(
-                save_steps=10,
-                output_dir=os.path.join(config.model_dir, 'eval'),
+                save_steps=10, output_dir=os.path.join(config.model_dir, 'eval'),
                 summary_op=image_summary
             )
         with tf.name_scope('evaluator'):
@@ -87,7 +87,7 @@ def model_fn(features, labels, mode, params, config):
         optimizer = tf.train.RMSPropOptimizer(
             learning_rate, decay=0.9, momentum=0.9, epsilon=1.0
         )
-        grads_and_vars = optimizer.compute_gradients(total_loss, var_list=None)
+        grads_and_vars = optimizer.compute_gradients(total_loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)
 
     for g, v in grads_and_vars:
@@ -118,44 +118,54 @@ def add_weight_decay(weight_decay):
     )
 
     trainable_vars = tf.trainable_variables()
-    kernels = [v for v in trainable_vars if '/weights' in v.name]
+    kernels = [v for v in trainable_vars if 'weights' in v.name and 'depthwise_weights' not in v.name]
 
     for K in kernels:
         x = tf.multiply(weight_decay, tf.nn.l2_loss(K))
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, x)
 
-from PIL import Image, ImageDraw, ImageFont
+
 def get_image_visualizer(images, predictions, max_outputs=20):
+    """
+    Arguments:
+        images: a float tensor with shape [batch_size, 3, height, width],
+            a batch of RGB images with pixels values in the range [0, 1].
+        predictions:
+        max_outputs:
+    Returns:
+        a summary op.
+    """
     images = tf.transpose(images, perm=[0, 2, 3, 1])  # to 'NHWC' format
     tensors = [
-        images[:max_outputs], 
-        predictions['boxes'][:max_outputs], 
+        images[:max_outputs],
+        predictions['boxes'][:max_outputs],
         predictions['scores'][:max_outputs],
-        predictions['labels'][:max_outputs], 
+        predictions['labels'][:max_outputs],
         predictions['num_boxes'][:max_outputs]
     ]
+
     def draw_boxes(images, boxes, scores, labels, num_boxes):
         result = []
         for i, b, s, n in zip(images, boxes, scores, num_boxes):
             result.append(draw_boxes_on_image(i, b[:n], s[:n]))
         return np.stack(result, axis=0)
+
     images_with_boxes = tf.py_func(draw_boxes, tensors, tf.uint8, stateful=False)
     return tf.summary.image('predictions', images_with_boxes, max_outputs)
-    
-    
-    
+
+
 def draw_boxes_on_image(image, boxes, scores):
     image = (255.0*image).astype('uint8')
     image = Image.fromarray(image)
     draw = ImageDraw.Draw(image, 'RGBA')
     width, height = image.size
-    scale = np.array([height, width, height, width], dtype='float')
+    scale = np.array([height, width, height, width], dtype='float32')
     boxes = boxes*scale
-    
+
     for box, score in zip(boxes, scores):
         ymin, xmin, ymax, xmax = box
-        
-        text = str(score)
+
+        text = '{0:.3f}'.format(score)
         fill = (255, 255, 255, 45)
         outline = 'red'
 
@@ -167,18 +177,6 @@ def draw_boxes_on_image(image, boxes, scores):
             [(xmin, ymin), (xmin + 4*len(text) + 4, ymin + 10)],
             fill='white', outline='white'
         )
-        #font = ImageFont.truetype('/usr/share/fonts/truetype/ubuntu-font-family/Ubuntu-B.ttf', size=8)
         draw.text((xmin + 1, ymin + 1), text, fill='red')
 
     return np.array(image)
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    

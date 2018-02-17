@@ -1,9 +1,6 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-
-
-# well, you can't change this
-DATA_FORMAT = 'NCHW'
+from src.constants import BATCH_NORM_MOMENTUM
 
 
 def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
@@ -31,7 +28,7 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
     def batch_norm(x):
         x = tf.layers.batch_normalization(
             x, axis=1, center=True, scale=True,
-            momentum=0.9, epsilon=0.001, 
+            momentum=BATCH_NORM_MOMENTUM, epsilon=0.001,
             training=is_training, fused=True,
             name='BatchNorm'
         )
@@ -42,7 +39,7 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
             'normalizer_fn': batch_norm,
-            'data_format': DATA_FORMAT
+            'data_format': 'NCHW'
         }
         with slim.arg_scope([slim.conv2d, slim.separable_conv2d], **params):
             features = {}
@@ -77,14 +74,13 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
     return x, features
 
 
-def _depthwise_conv(x, kernel=3, strides=1, padding='SAME', trainable=True):
-
+def _depthwise_conv(x, kernel=3, strides=1, padding='SAME'):
     in_channels = x.shape.as_list()[1]
     W = tf.get_variable(
-        'depthwise_weights', [kernel, kernel, in_channels, 1],
-        tf.float32, trainable=trainable
+        'depthwise_weights',
+        [kernel, kernel, in_channels, 1],
+        tf.float32
     )
-
     # why not [1, strides, strides, 1] ?
-    x = tf.nn.depthwise_conv2d(x, W, [1, 1, strides, strides], padding, data_format=DATA_FORMAT)
+    x = tf.nn.depthwise_conv2d(x, W, [1, 1, strides, strides], padding, data_format='NCHW')
     return x

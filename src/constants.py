@@ -21,3 +21,6 @@ MATCHING_THRESHOLD = 0.5
 
 # for tf.map_fn when creating training targets or doing nms
 PARALLEL_ITERATIONS = 8
+
+# this is important
+BATCH_NORM_MOMENTUM = 0.9
