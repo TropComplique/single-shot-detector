@@ -34,7 +34,7 @@ class FeatureExtractor:
             )
             return x
 
-        filters = [128, 128, 128, 128]
+        filters = [64, 64, 64]
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
@@ -47,8 +47,8 @@ class FeatureExtractor:
                 x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d' % i)
                 image_features.append(x)
 
-        depth = 128
-        new_image_features = feature_pyramid_network(image_features[:5], is_training, depth)
+        depth = 64
+        new_image_features = feature_pyramid_network(image_features[:5], self.is_training, depth)
 
         return new_image_features + image_features[5:]
 
@@ -71,16 +71,17 @@ def feature_pyramid_network(image_features, is_training, depth):
         'data_format': 'NCHW'
     }
     with slim.arg_scope([slim.conv2d], **params):
-
+        
+        new_image_features = []
         top_down = slim.conv2d(image_features[-1], depth, [1, 1], scope='fpn_beginning')
         new_image_features.append(top_down)
 
-        for i, feature_map in reversed(enumerate(image_features[:-1])):
+        for i, feature_map in enumerate(reversed(image_features[:-1])):
             with tf.variable_scope('fpn_block_%d' % i):
                 new_feature_map, top_down = fpn_block(feature_map, top_down, depth)
                 new_image_features.append(new_feature_map)
 
-    return reversed(new_image_features)
+    return new_image_features[::-1]
 
 
 def fpn_block(feature_map, top_down, depth):

@@ -160,10 +160,17 @@ class SSD:
             batch_size = tf.shape(x)[0]
             height_i, width_i = x.shape.as_list()[2:]
             num_anchors_on_feature_map = height_i * width_i * num_predictions_per_location
-
+            
+            with slim.arg_scope([slim.conv2d], **params):
+                x1 = slim.conv2d(
+                    x, 64,
+                    [1, 1], scope='box_encoding_predictor1',
+                    reuse=tf.AUTO_REUSE,
+                    data_format='NCHW'
+                )
             y = slim.conv2d(
-                x, num_predictions_per_location * 4,
-                [1, 1], activation_fn=None, scope='box_encoding_predictor',
+                x1, num_predictions_per_location * 4,
+                [1, 1], activation_fn=None, scope='box_encoding_predictor2',
                 reuse=tf.AUTO_REUSE,
                 data_format='NCHW'
             )

@@ -124,7 +124,7 @@ class Pipeline:
         filename = parsed_features['filename']
         return image, boxes, labels, num_boxes, filename
 
-    def _augmentation(self, image, boxes, labels):
+    def _augmentation_fn(self, image, boxes, labels):
         params = self.augmentation
 
         if params['do_random_crop']:

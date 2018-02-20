@@ -57,7 +57,7 @@ class AnchorGenerator:
         assert len(scales) == num_layers
         scales = scales + [1.0]
 
-        box_specs_list = _get_box_specs(self, scales)
+        box_specs_list = self._get_box_specs(scales)
 
         anchor_grid_list, num_anchors_per_feature_map = [], []
         for grid_size, box_spec in zip(feature_map_shape_list, box_specs_list):

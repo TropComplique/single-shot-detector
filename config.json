@@ -6,7 +6,7 @@
     "num_classes": 1, "weight_decay": 1e-5,
     "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
 
-    "scales": [0.05, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6],
+    "scales": [0.05, 0.15, 0.2, 0.3, 0.4, 0.5],
     "min_scale": 0.05, "max_scale": 0.8,
     "aspect_ratios": [1.0, 0.6, 0.4, 0.3333, 0.2],
     "interpolated_scale_aspect_ratio": 1.0,
