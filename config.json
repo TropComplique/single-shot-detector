@@ -6,6 +6,7 @@
     "num_classes": 1, "weight_decay": 1e-5,
     "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
 
+    "scales": [0.05, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6],
     "min_scale": 0.05, "max_scale": 0.8,
     "aspect_ratios": [1.0, 0.6, 0.4, 0.3333, 0.2],
     "interpolated_scale_aspect_ratio": 1.0,
@@ -15,11 +16,12 @@
 
     "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
 
-    "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
+    "loss_to_use": "classification",
+    "loc_loss_weight": 1.0, "cls_loss_weight": 1.0,
     "num_hard_examples": 500, "nms_threshold": 0.99,
     "max_negatives_per_positive": 3.0, "min_negatives_per_image": 0,
 
-    "lr_boundaries": [3000, 8000, 10000, 11000], 
+    "lr_boundaries": [3000, 8000, 10000, 11000],
     "lr_values": [0.008, 0.004, 0.001, 0.0005, 0.0001]
   },
 

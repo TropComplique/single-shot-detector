@@ -31,9 +31,9 @@ def classification_loss(predictions, targets):
         a float tensor with shape [batch_size, num_anchors].
     """
     cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=targets, logits=predictions)
-#     cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-#         labels=targets, logits=predictions
-#     )
+    # cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
+    #     labels=targets, logits=predictions
+    # )
     # return tf.reduce_sum(cross_entropy, axis=2)
     return cross_entropy
 
@@ -41,7 +41,8 @@ def classification_loss(predictions, targets):
 def apply_hard_mining(
         location_losses, cls_losses,
         class_predictions_with_background, box_encodings, matches,
-        anchors, loc_loss_weight=1.0, cls_loss_weight=1.0,
+        anchors, loss_to_use='classification',
+        loc_loss_weight=1.0, cls_loss_weight=1.0,
         num_hard_examples=3000, nms_threshold=0.99,
         max_negatives_per_positive=3, min_negatives_per_image=0):
     """Applies hard mining to anchorwise losses.
@@ -53,12 +54,13 @@ def apply_hard_mining(
         class_predictions_with_background: a float tensor with shape [batch_size, num_anchors, num_classes + 1].
         matches: an int tensor with shape [batch_size, num_anchors].
         anchors: a float tensor with shape [num_anchors, 4].
-        loc_loss_weight:
-        cls_loss_weight:
-        num_hard_examples:
-        nms_threshold:
-        max_negatives_per_positive:
-        min_negatives_per_image:
+        loss_to_use: a string, only possible values are ['classification', 'both'].
+        loc_loss_weight: a float number.
+        cls_loss_weight: a float number.
+        num_hard_examples: an integer.
+        nms_threshold: a float number.
+        max_negatives_per_positive: a float number.
+        min_negatives_per_image: an integer.
     Returns:
         two float tensors with shape [].
     """
@@ -78,7 +80,9 @@ def apply_hard_mining(
     mined_location_losses, mined_cls_losses = [], []
 
     for i, box_locations in enumerate(decoded_boxes_list):
-        image_losses = cls_losses_list[i] * cls_loss_weight + location_losses_list[i] * loc_loss_weight
+        image_losses = cls_losses_list[i] * cls_loss_weight
+        if loss_to_use == 'both':
+            image_losses += (location_losses_list[i] * loc_loss_weight)
         # it has shape [num_anchors]
 
         selected_indices = tf.image.non_max_suppression(

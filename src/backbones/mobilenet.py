@@ -3,15 +3,14 @@ import tensorflow.contrib.slim as slim
 from src.constants import BATCH_NORM_MOMENTUM
 
 
-def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
+def mobilenet_v1_base(images, is_training, depth_multiplier=1.0, min_depth=8):
     """
     Arguments:
         images: a float tensor with shape [batch_size, 3, height, width],
             a batch of RGB images with pixels values in the range [0, 1].
         is_training: a boolean.
+        depth_multiplier: a float number, multiplier for the number of filters in a layer.
         min_depth: an integer, the minimal number of filters in a layer.
-        depth_multiplier: a float number, possible values are [0.25, 0.5, 0.75, 1.0],
-            multiplier for the number of filters in a layer.
     Returns:
         x: a float tensor with shape [batch_size, final_channels, final_height, final_width].
         features: a dict, layer name -> a float tensor.
@@ -41,7 +40,7 @@ def mobilenet_v1_base(images, is_training, min_depth=8, depth_multiplier=1.0):
             'normalizer_fn': batch_norm,
             'data_format': 'NCHW'
         }
-        with slim.arg_scope([slim.conv2d, slim.separable_conv2d], **params):
+        with slim.arg_scope([slim.conv2d], **params):
             features = {}
 
             with tf.name_scope('standardize_input'):

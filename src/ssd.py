@@ -15,23 +15,21 @@ class SSD:
         self.num_classes = num_classes
         with tf.name_scope('anchor_generator'):
             self.anchors = anchor_generator(feature_maps, images)
-        self.num_basis_anchors = anchor_generator.num_basis_anchors
-        self._add_box_predictions(feature_maps)
+        self.num_anchors_per_location = anchor_generator.num_anchors_per_location
+        with tf.name_scope('prediction_layers'):
+            self._add_box_predictions(feature_maps)
 
     def get_predictions(self, score_threshold=0.1, iou_threshold=0.6, max_boxes_per_class=20):
         with tf.name_scope('postprocessing'):
             boxes = batch_decode(self.box_encodings, self.anchors)
-            
+
             scores = tf.nn.softmax(self.class_predictions_with_background)
-            scores = tf.slice(
-                scores,
-                [0, 0, 1], [-1, -1, -1]
-            )
-            
-#             class_predictions_without_background = tf.slice(
-#                 self.class_predictions_with_background,
-#                 [0, 0, 1], [-1, -1, -1]
-#             )
+            scores = tf.slice(scores, [0, 0, 1], [-1, -1, -1])
+
+            # class_predictions_without_background = tf.slice(
+            #     self.class_predictions_with_background,
+            #     [0, 0, 1], [-1, -1, -1]
+            # )
             # scores = tf.sigmoid(class_predictions_without_background)
 
             boxes, scores, classes, num_detections = batch_multiclass_non_max_suppression(
@@ -45,10 +43,12 @@ class SSD:
         """Compute scalar loss tensors with respect to provided groundtruth.
 
         Arguments:
-            boxes: a float tensor with shape [batch_size, max_num_boxes, 4].
-            labels: an int tensor with shape [batch_size, max_num_boxes].
-            num_boxes: an int tensor with shape [batch_size].
-                where max_num_boxes = max(num_boxes).
+            groundtruth: a dict with the following keys
+                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
+                'labels': an int tensor with shape [batch_size, max_num_boxes].
+                'num_boxes': an int tensor with shape [batch_size].
+                    where max_num_boxes = max(num_boxes).
+            params: a dict with parameters for losses.
         Returns:
             two float tensors with shape [].
         """
@@ -81,6 +81,7 @@ class SSD:
                     location_losses, cls_losses,
                     self.class_predictions_with_background,
                     self.box_encodings, matches, self.anchors,
+                    loss_to_use=params['loss_to_use'],
                     loc_loss_weight=params['loc_loss_weight'],
                     cls_loss_weight=params['cls_loss_weight'],
                     num_hard_examples=params['num_hard_examples'],
@@ -120,7 +121,7 @@ class SSD:
                 back_prop=False, swap_memory=False, infer_shape=True
             )
             return cls_targets, reg_targets, matches
-    
+
     def _add_box_predictions(self, feature_maps):
         """Adds box predictors to each feature map and returns concatenated results.
 
@@ -134,9 +135,9 @@ class SSD:
                 [batch_size, num_anchors, num_classes + 1].
         """
         num_classes = self.num_classes
-        num_basis_anchors = self.num_basis_anchors
+        num_anchors_per_location = self.num_anchors_per_location
         num_feature_maps = len(feature_maps)
-        
+
         def batch_norm(x):
             x = tf.layers.batch_normalization(
                 x, axis=1, center=True, scale=True,
@@ -152,21 +153,17 @@ class SSD:
             'normalizer_fn': batch_norm,
             'data_format': 'NCHW'
         }
-    
+
         box_encodings, class_predictions_with_background = [], []
-        for i, x, num_predictions_per_location in zip(range(num_feature_maps), feature_maps, num_basis_anchors):
+        for i, x, num_predictions_per_location in zip(range(num_feature_maps), feature_maps, num_anchors_per_location):
 
             batch_size = tf.shape(x)[0]
             height_i, width_i = x.shape.as_list()[2:]
             num_anchors_on_feature_map = height_i * width_i * num_predictions_per_location
-            
-#             if i < 2:
-#                 with slim.arg_scope([slim.conv2d], **params):
-#                     num_filters = x.shape.as_list()[1]
-#                     x = slim.conv2d(x, num_filters, (3, 3), stride=1, scope='Conv2d_%d_3x3' % i)
+
             y = slim.conv2d(
                 x, num_predictions_per_location * 4,
-                [1, 1], activation_fn=None, scope='box_encoding_predictor',#_%d' % i, 
+                [1, 1], activation_fn=None, scope='box_encoding_predictor',
                 reuse=tf.AUTO_REUSE,
                 data_format='NCHW'
             )
@@ -178,7 +175,7 @@ class SSD:
 
             y = slim.conv2d(
                 x, num_predictions_per_location * (num_classes + 1),
-                [1, 1], activation_fn=None, scope='class_predictor',#_%d' % i, 
+                [1, 1], activation_fn=None, scope='class_predictor',
                 reuse=tf.AUTO_REUSE,
                 data_format='NCHW'
             )

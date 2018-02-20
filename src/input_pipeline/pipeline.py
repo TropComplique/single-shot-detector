@@ -28,10 +28,7 @@ class Pipeline:
 
         dataset = tf.data.TFRecordDataset(filename)
         dataset = dataset.repeat(1 if not repeat else None)
-        dataset = dataset.map(
-            self._parse_and_preprocess,
-            num_parallel_calls=NUM_THREADS
-        )
+        dataset = dataset.map(self._parse_and_preprocess, num_parallel_calls=NUM_THREADS)
 
         if shuffle:
             dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
@@ -54,12 +51,14 @@ class Pipeline:
     def get_batch(self):
         """
         Returns:
-            image: a float tensor with shape [batch_size, 3, image_height, image_width].
-            boxes: a float tensor with shape [batch_size, max_num_boxes, 4].
-            labels: an int tensor with shape [batch_size, max_num_boxes].
-            num_boxes: an int tensor with shape [batch_size].
-            filenames: a string tensor with shape [batch_size].
-                where max_num_boxes = max(num_boxes).
+            features: a dict with the following keys
+                'images': a float tensor with shape [batch_size, 3, image_height, image_width].
+                'filenames': a string tensor with shape [batch_size].
+            labels: a dict with the following keys
+                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
+                'labels': an int tensor with shape [batch_size, max_num_boxes].
+                'num_boxes': an int tensor with shape [batch_size].
+            where max_num_boxes = max(num_boxes).
         """
         images, boxes, labels, num_boxes, filenames = self.iterator.get_next()
         images.set_shape([self.batch_size, 3, self.image_height, self.image_width])
@@ -114,17 +113,18 @@ class Pipeline:
 
         if self.augmentation is not None:
             image, boxes, labels = self._augmentation_fn(image, boxes, labels)
+        else:
+            image = tf.image.resize_images(
+                image, [self.image_height, self.image_width],
+                method=RESIZE_METHOD
+            )
 
-        image = tf.image.resize_images(
-            image, [self.image_height, self.image_width],
-            method=RESIZE_METHOD
-        )
         image = tf.transpose(image, perm=[2, 0, 1])  # to NCHW format
         num_boxes = tf.to_int32(tf.shape(boxes)[0])
         filename = parsed_features['filename']
         return image, boxes, labels, num_boxes, filename
 
-    def _augmentation_fn(self, image, boxes, labels):
+    def _augmentation(self, image, boxes, labels):
         params = self.augmentation
 
         if params['do_random_crop']:
@@ -139,6 +139,7 @@ class Pipeline:
             image, [self.image_height, self.image_width],
             method=RESIZE_METHOD
         )
+
         if params['do_random_color_manipulations']:
             image = random_color_manipulations(image, probability=0.5, grayscale_probability=0.1)
 

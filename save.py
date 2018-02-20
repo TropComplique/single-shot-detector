@@ -19,15 +19,13 @@ run_config = run_config.replace(
 
 estimator = tf.estimator.Estimator(model_fn, params=model_params, config=run_config)
 
+
 def serving_input_receiver_fn():
-    images = tf.placeholder(dtype=tf.float32, shape=[None, 360, 640, 3], name='image_tensor')
+    images = tf.placeholder(dtype=tf.float32, shape=[None, 384, 640, 3], name='image_tensor')
     features = {'images': tf.transpose(images*(1.0/255.0), perm=[0, 3, 1, 2])}
     return tf.estimator.export.ServingInputReceiver(features, {'images': images})
+
 
 estimator.export_savedmodel(
     'export/run00', serving_input_receiver_fn
 )
-
-
-
-

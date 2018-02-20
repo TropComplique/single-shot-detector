@@ -18,6 +18,7 @@ def model_fn(features, labels, mode, params, config):
 
     # ssd anchor maker
     anchor_generator = AnchorGenerator(
+        scales=params['scales'],
         min_scale=params['min_scale'], max_scale=params['max_scale'],
         aspect_ratios=params['aspect_ratios'],
         interpolated_scale_aspect_ratio=params['interpolated_scale_aspect_ratio'],
@@ -44,8 +45,14 @@ def model_fn(features, labels, mode, params, config):
         )
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        name_map = {'boxes': 'detection_boxes', 'scores': 'detection_scores', 'labels': 'detection_classes', 'num_boxes': 'num_detections'}
-        export_outputs = tf.estimator.export.PredictOutput({name: tf.identity(tensor, name_map[name]) for name, tensor in predictions.items()})
+        name_map = {
+            'boxes': 'detection_boxes', 'scores': 'detection_scores',
+            'labels': 'detection_classes', 'num_boxes': 'num_detections'
+        }
+        export_outputs = tf.estimator.export.PredictOutput({
+            name: tf.identity(tensor, name_map[name])
+            for name, tensor in predictions.items()
+        })
         return tf.estimator.EstimatorSpec(mode, predictions=predictions, export_outputs={'outputs': export_outputs})
 
     with tf.name_scope('weight_decay'):
@@ -86,10 +93,6 @@ def model_fn(features, labels, mode, params, config):
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops), tf.variable_scope('optimizer'):
-#         optimizer = tf.train.RMSPropOptimizer(
-#             learning_rate, decay=0.9, momentum=0.9, epsilon=1.0 # [0.01, 0.005, 0.001, 0.0005]
-#         )
-       # optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-4)
         optimizer = tf.train.AdamOptimizer(learning_rate)
         import re
         trainable_var = tf.trainable_variables()

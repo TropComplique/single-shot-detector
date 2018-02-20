@@ -3,7 +3,7 @@ import math
 
 
 class AnchorGenerator:
-    def __init__(self, min_scale=0.2, max_scale=0.9,
+    def __init__(self, scales=None, min_scale=0.2, max_scale=0.9,
                  aspect_ratios=(1.0, 2.0, 3.0, 0.5, 0.333),
                  interpolated_scale_aspect_ratio=1.0,
                  reduce_boxes_in_lowest_layer=True):
@@ -13,6 +13,7 @@ class AnchorGenerator:
         to coarsest resolution --- this is used to (linearly) interpolate scales of anchor boxes.
 
         Arguments:
+            scales: a list of float numbers or None.
             min_scale: a float number, scale of anchors corresponding to finest resolution.
             max_scale: a float number, scale of anchors corresponding to coarsest resolution.
             aspect_ratios: a list or tuple of float numbers, aspect ratios to place on each grid point.
@@ -22,6 +23,7 @@ class AnchorGenerator:
             reduce_boxes_in_lowest_layer: a boolean to indicate whether the fixed 3
                 boxes per location is used in the lowest layer.
         """
+        self.scales = scales
         self.min_scale = min_scale
         self.max_scale = max_scale
         self.aspect_ratios = aspect_ratios
@@ -43,32 +45,21 @@ class AnchorGenerator:
         for feature_map in image_features:
             height_i, width_i = feature_map.shape.as_list()[2:]
             feature_map_shape_list.append((height_i, width_i))
-        print('sizes of feature maps:', feature_map_shape_list)
-
         h, w = images.shape.as_list()[2:]
         image_aspect_ratio = w/h
 
-#         scales = [
-#             self.min_scale + (self.max_scale - self.min_scale)*i/(num_layers - 1)
-#             for i in range(num_layers)
-#         ] + [1.0]
-        scales = [0.05, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 1.0]
-        # scales = [0.05, 0.15, 0.2, 0.3, 0.4, 0.5, 1.0]
+        scales = self.scales
+        if scales is None:
+            scales = [
+                self.min_scale + (self.max_scale - self.min_scale)*i/(num_layers - 1)
+                for i in range(num_layers)
+            ]
+        assert len(scales) == num_layers
+        scales = scales + [1.0]
 
-        box_specs_list = []
-        for layer, scale, scale_next in zip(range(num_layers), scales[:-1], scales[1:]):
-            layer_box_specs = []
-            if layer == 0 and self.reduce_boxes_in_lowest_layer:
-                layer_box_specs = [(0.1, 1.0), (scale, 2.0), (scale, 0.5)]
-            else:
-                for aspect_ratio in self.aspect_ratios:
-                    layer_box_specs.append((scale, aspect_ratio))
-                if self.interpolated_scale_aspect_ratio > 0.0:
-                    layer_box_specs.append((math.sqrt(scale*scale_next), self.interpolated_scale_aspect_ratio))
-            box_specs_list.append(layer_box_specs)
+        box_specs_list = _get_box_specs(self, scales)
 
-        anchor_grid_list = []
-        num_anchors_per_feature_map = []
+        anchor_grid_list, num_anchors_per_feature_map = [], []
         for grid_size, box_spec in zip(feature_map_shape_list, box_specs_list):
             scales, aspect_ratios = zip(*box_spec)
             h, w = grid_size
@@ -80,7 +71,7 @@ class AnchorGenerator:
             ))
             num_anchors_per_feature_map.append(grid_size[0] * grid_size[1] * len(scales))
 
-        self.num_basis_anchors = [len(layer_box_specs) for layer_box_specs in box_specs_list]
+        self.num_anchors_per_location = [len(layer_box_specs) for layer_box_specs in box_specs_list]
         self.feature_map_shape_list = feature_map_shape_list
         self.num_anchors_per_feature_map = num_anchors_per_feature_map
         self.anchor_grid_list = anchor_grid_list
@@ -88,6 +79,20 @@ class AnchorGenerator:
         anchors = tf.concat(anchor_grid_list, axis=0)
         anchors = tf.clip_by_value(anchors, 0.0, 1.0)
         return anchors
+
+    def _get_box_specs(self, scales):
+        box_specs_list = []
+        for layer, (scale, scale_next) in enumerate(zip(scales[:-1], scales[1:])):
+            layer_box_specs = []
+            if layer == 0 and self.reduce_boxes_in_lowest_layer:
+                layer_box_specs = [(0.1, 1.0), (scale, 2.0), (scale, 0.5)]
+            else:
+                for aspect_ratio in self.aspect_ratios:
+                    layer_box_specs.append((scale, aspect_ratio))
+                if self.interpolated_scale_aspect_ratio > 0.0:
+                    layer_box_specs.append((math.sqrt(scale*scale_next), self.interpolated_scale_aspect_ratio))
+            box_specs_list.append(layer_box_specs)
+        return box_specs_list
 
 
 def tile_anchors(image_aspect_ratio, grid_height, grid_width, scales, aspect_ratios, anchor_stride, anchor_offset):

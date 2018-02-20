@@ -46,33 +46,44 @@ class FeatureExtractor:
                 x = slim.conv2d(x, num_filters // 2, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
                 x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d' % i)
                 image_features.append(x)
-     
+
         depth = 128
-        new_image_features = []
+        new_image_features = feature_pyramid_network(image_features[:5], is_training, depth)
 
-        with slim.arg_scope([slim.conv2d], **params):
-            top_down = slim.conv2d(image_features[4], depth, [1, 1], scope='Conv2d_1x1')
-            for i, feature_map in enumerate(reversed(image_features[:4])):
-                with tf.variable_scope('FPN_%d' % i):
-                    new_feature_map, top_down = fpn_block(feature_map, top_down, depth)
-                    new_image_features.append(new_feature_map)
-            
-        return new_image_features[:4][::-1] + image_features[4:]
+        return new_image_features + image_features[5:]
 
-    
-def nearest_neighbor_upsampling(x, scale=2):
-    with tf.name_scope('upsampling'):
-        batch_size = tf.shape(x)[0]
-        channels, height, width = x.shape.as_list()[1:]
-        shape_before_tile = [batch_size, channels, height, 1, width, 1]
-        shape_after_tile = [batch_size, channels, height * scale, width * scale]
-        x = tf.reshape(x, shape_before_tile)
-        x = tf.tile(x, [1, 1, 1, scale, 1, scale])
-        x = tf.reshape(x, shape_after_tile)
+
+def feature_pyramid_network(image_features, is_training, depth):
+
+    def batch_norm(x):
+        x = tf.layers.batch_normalization(
+            x, axis=1, center=True, scale=True,
+            momentum=BATCH_NORM_MOMENTUM, epsilon=0.001,
+            training=is_training, fused=True,
+            name='BatchNorm'
+        )
         return x
 
+    params = {
+        'padding': 'SAME',
+        'activation_fn': tf.nn.relu6,
+        'normalizer_fn': batch_norm,
+        'data_format': 'NCHW'
+    }
+    with slim.arg_scope([slim.conv2d], **params):
 
-def fpn_block(feature_map, top_down, depth=128):
+        top_down = slim.conv2d(image_features[-1], depth, [1, 1], scope='fpn_beginning')
+        new_image_features.append(top_down)
+
+        for i, feature_map in reversed(enumerate(image_features[:-1])):
+            with tf.variable_scope('fpn_block_%d' % i):
+                new_feature_map, top_down = fpn_block(feature_map, top_down, depth)
+                new_image_features.append(new_feature_map)
+
+    return reversed(new_image_features)
+
+
+def fpn_block(feature_map, top_down, depth):
     if not is_same_size(feature_map, top_down):
         top_down = nearest_neighbor_upsampling(top_down)
     residual = slim.conv2d(feature_map, depth, [1, 1], scope='Conv2d_1x1')
@@ -85,6 +96,17 @@ def is_same_size(x, y):
     height1, width1 = x.shape.as_list()[2:]
     height2, width2 = y.shape.as_list()[2:]
     return (height1 == height2) and (width1 == width2)
-    
 
 
+def nearest_neighbor_upsampling(x, scale=2):
+    with tf.name_scope('upsampling'):
+
+        batch_size = tf.shape(x)[0]
+        channels, height, width = x.shape.as_list()[1:]
+        shape_before_tile = [batch_size, channels, height, 1, width, 1]
+        shape_after_tile = [batch_size, channels, height * scale, width * scale]
+
+        x = tf.reshape(x, shape_before_tile)
+        x = tf.tile(x, [1, 1, 1, scale, 1, scale])
+        x = tf.reshape(x, shape_after_tile)
+        return x
