@@ -8,7 +8,7 @@ SCALE_FACTORS = [10.0, 10.0, 5.0, 5.0]
 # Here are input pipeline settings.
 # you need to tweak these numbers for your system,
 # it can accelerate training
-SHUFFLE_BUFFER_SIZE = 300
+SHUFFLE_BUFFER_SIZE = 1000
 PREFETCH_BUFFER_SIZE = 100
 NUM_THREADS = 8
 # read here about buffer sizes:
@@ -17,7 +17,7 @@ NUM_THREADS = 8
 # images are resized before feeding to the network
 RESIZE_METHOD = tf.image.ResizeMethod.NEAREST_NEIGHBOR
 # threshold for IoU when creating training targets
-MATCHING_THRESHOLD = 0.5
+MATCHING_THRESHOLD = 0.6
 
 # for tf.map_fn when creating training targets or doing nms
 PARALLEL_ITERATIONS = 8

@@ -16,7 +16,7 @@ def get_input_fn(is_training=True):
     image_size = input_pipeline_params['image_size']
     iterator_initializer_hook = IteratorInitializerHook()
     filename = 'data/train.tfrecords' if is_training else 'data/val.tfrecords'
-    batch_size = input_pipeline_params['batch_size'] if is_training else 24
+    batch_size = input_pipeline_params['batch_size'] if is_training else 64
     augmentation = input_pipeline_params if is_training else None
 
     def input_fn():
@@ -39,7 +39,7 @@ config.gpu_options.visible_device_list = '0'
 
 run_config = tf.estimator.RunConfig()
 run_config = run_config.replace(
-    model_dir='models/run00',
+    model_dir=model_params['model_dir'],
     session_config=config,
     save_summary_steps=100,
     save_checkpoints_secs=300,
@@ -52,12 +52,17 @@ estimator = tf.estimator.Estimator(model_fn, params=model_params, config=run_con
 
 
 train_spec = tf.estimator.TrainSpec(
-    train_input_fn, max_steps=10000,
+    train_input_fn, max_steps=12000,
     hooks=[train_iterator_initializer_hook]
 )
 eval_spec = tf.estimator.EvalSpec(
     val_input_fn, steps=None,
     hooks=[val_iterator_initializer_hook],
-    start_delay_secs=300, throttle_secs=300
+    start_delay_secs=300, throttle_secs=600
 )
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
+
+
+
+
+

@@ -31,7 +31,6 @@ class Evaluator:
     def _initialize(self):
         self.detections_by_label = {label: [] for label in range(self.num_classes)}
         self.groundtruth_by_label_by_image = {label: {} for label in range(self.num_classes)}
-        self.result = None
 
     def add_groundtruth(self, images, boxes, labels, num_boxes):
         batch_size = len(images)

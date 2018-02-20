@@ -4,10 +4,10 @@ import tensorflow as tf
 def random_color_manipulations(image, probability=0.5, grayscale_probability=0.1):
 
     def manipulate(image):
-        image = tf.image.random_brightness(image, 0.15)
-        image = tf.image.random_contrast(image, 0.8, 1.25)
-        image = tf.image.random_hue(image, 0.1)
-        image = tf.image.random_saturation(image, 0.8, 1.25)
+        image = tf.image.random_brightness(image, 0.2)
+        image = tf.image.random_contrast(image, 0.75, 1.3)
+        image = tf.image.random_hue(image, 0.15)
+        image = tf.image.random_saturation(image, 0.75, 1.3)
         image = tf.clip_by_value(image, 0.0, 1.0)
         return image
 

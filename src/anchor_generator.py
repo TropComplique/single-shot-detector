@@ -48,10 +48,12 @@ class AnchorGenerator:
         h, w = images.shape.as_list()[2:]
         image_aspect_ratio = w/h
 
-        scales = [
-            self.min_scale + (self.max_scale - self.min_scale)*i/(num_layers - 1)
-            for i in range(num_layers)
-        ] + [1.0]
+#         scales = [
+#             self.min_scale + (self.max_scale - self.min_scale)*i/(num_layers - 1)
+#             for i in range(num_layers)
+#         ] + [1.0]
+        scales = [0.05, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 1.0]
+        # scales = [0.05, 0.15, 0.2, 0.3, 0.4, 0.5, 1.0]
 
         box_specs_list = []
         for layer, scale, scale_next in zip(range(num_layers), scales[:-1], scales[1:]):

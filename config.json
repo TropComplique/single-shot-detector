@@ -1,5 +1,7 @@
 {
   "model_params": {
+    "model_dir": "models/run05",
+
     "depth_multiplier": 0.5,
     "num_classes": 1, "weight_decay": 1e-5,
     "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
@@ -9,7 +11,7 @@
     "interpolated_scale_aspect_ratio": 1.0,
     "reduce_boxes_in_lowest_layer": false,
 
-    "score_threshold": 0.1, "iou_threshold": 0.6, "max_boxes_per_class": 40,
+    "score_threshold": 0.1, "iou_threshold": 0.5, "max_boxes_per_class": 20,
 
     "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
 
@@ -17,11 +19,12 @@
     "num_hard_examples": 500, "nms_threshold": 0.99,
     "max_negatives_per_positive": 3.0, "min_negatives_per_image": 0,
 
-    "lr_boundaries": [1500, 3000, 5000], "lr_values": [0.01, 0.005, 0.001, 0.0005]
+    "lr_boundaries": [3000, 8000, 10000, 11000], 
+    "lr_values": [0.008, 0.004, 0.001, 0.0005, 0.0001]
   },
 
   "input_pipeline_params": {
-    "image_size": [640, 360],
+    "image_size": [640, 384],
     "batch_size": 24,
 
     "do_random_crop": true,

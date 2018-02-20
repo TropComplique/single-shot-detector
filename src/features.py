@@ -34,7 +34,7 @@ class FeatureExtractor:
             )
             return x
 
-        filters = [192, 192, 96, 96]
+        filters = [128, 128, 128, 128]
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
@@ -43,8 +43,48 @@ class FeatureExtractor:
         }
         with slim.arg_scope([slim.conv2d], **params):
             for i, num_filters in enumerate(filters, 14):
-                x = slim.conv2d(x, num_filters // 2, (1, 1), stride=1, scope='Conv2d_%d' % i)
-                x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d_1x1' % i)
+                x = slim.conv2d(x, num_filters // 2, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
+                x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d' % i)
                 image_features.append(x)
+     
+        depth = 128
+        new_image_features = []
 
-        return image_features
+        with slim.arg_scope([slim.conv2d], **params):
+            top_down = slim.conv2d(image_features[4], depth, [1, 1], scope='Conv2d_1x1')
+            for i, feature_map in enumerate(reversed(image_features[:4])):
+                with tf.variable_scope('FPN_%d' % i):
+                    new_feature_map, top_down = fpn_block(feature_map, top_down, depth)
+                    new_image_features.append(new_feature_map)
+            
+        return new_image_features[:4][::-1] + image_features[4:]
+
+    
+def nearest_neighbor_upsampling(x, scale=2):
+    with tf.name_scope('upsampling'):
+        batch_size = tf.shape(x)[0]
+        channels, height, width = x.shape.as_list()[1:]
+        shape_before_tile = [batch_size, channels, height, 1, width, 1]
+        shape_after_tile = [batch_size, channels, height * scale, width * scale]
+        x = tf.reshape(x, shape_before_tile)
+        x = tf.tile(x, [1, 1, 1, scale, 1, scale])
+        x = tf.reshape(x, shape_after_tile)
+        return x
+
+
+def fpn_block(feature_map, top_down, depth=128):
+    if not is_same_size(feature_map, top_down):
+        top_down = nearest_neighbor_upsampling(top_down)
+    residual = slim.conv2d(feature_map, depth, [1, 1], scope='Conv2d_1x1')
+    top_down = 0.5*(top_down + residual)
+    new_feature_map = slim.conv2d(top_down, depth, [3, 3], scope='Conv2d_3x3')
+    return new_feature_map, top_down
+
+
+def is_same_size(x, y):
+    height1, width1 = x.shape.as_list()[2:]
+    height2, width2 = y.shape.as_list()[2:]
+    return (height1 == height2) and (width1 == width2)
+    
+
+

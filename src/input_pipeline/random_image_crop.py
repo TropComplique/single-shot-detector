@@ -18,7 +18,7 @@ def random_image_crop(
         labels = tf.gather(labels, keep_ids)
         return image, boxes, labels
 
-    do_it = tf.greater(tf.random_uniform([]), probability)
+    do_it = tf.less(tf.random_uniform([]), probability)
     image, boxes, labels = tf.cond(
         do_it,
         lambda: crop(image, boxes, labels),

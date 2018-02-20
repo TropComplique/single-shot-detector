@@ -44,7 +44,9 @@ def model_fn(features, labels, mode, params, config):
         )
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+        name_map = {'boxes': 'detection_boxes', 'scores': 'detection_scores', 'labels': 'detection_classes', 'num_boxes': 'num_detections'}
+        export_outputs = tf.estimator.export.PredictOutput({name: tf.identity(tensor, name_map[name]) for name, tensor in predictions.items()})
+        return tf.estimator.EstimatorSpec(mode, predictions=predictions, export_outputs={'outputs': export_outputs})
 
     with tf.name_scope('weight_decay'):
         add_weight_decay(params['weight_decay'])
@@ -84,10 +86,16 @@ def model_fn(features, labels, mode, params, config):
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops), tf.variable_scope('optimizer'):
-        optimizer = tf.train.RMSPropOptimizer(
-            learning_rate, decay=0.9, momentum=0.9, epsilon=1.0
-        )
-        grads_and_vars = optimizer.compute_gradients(total_loss)
+#         optimizer = tf.train.RMSPropOptimizer(
+#             learning_rate, decay=0.9, momentum=0.9, epsilon=1.0 # [0.01, 0.005, 0.001, 0.0005]
+#         )
+       # optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-4)
+        optimizer = tf.train.AdamOptimizer(learning_rate)
+        import re
+        trainable_var = tf.trainable_variables()
+        regexp = re.compile('MobilenetV1/Conv2d_[0-4][/_]')
+        var_list = [v for v in trainable_var if not bool(regexp.search(v.name))]
+        grads_and_vars = optimizer.compute_gradients(total_loss, var_list=var_list)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)
 
     for g, v in grads_and_vars:
@@ -125,7 +133,7 @@ def add_weight_decay(weight_decay):
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, x)
 
 
-def get_image_visualizer(images, predictions, max_outputs=20):
+def get_image_visualizer(images, predictions, max_outputs=64):
     """
     Arguments:
         images: a float tensor with shape [batch_size, 3, height, width],

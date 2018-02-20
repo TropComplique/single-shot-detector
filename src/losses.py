@@ -30,10 +30,12 @@ def classification_loss(predictions, targets):
     Returns:
         a float tensor with shape [batch_size, num_anchors].
     """
-    cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=targets, logits=predictions
-    )
-    return tf.reduce_sum(cross_entropy, axis=2)
+    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=targets, logits=predictions)
+#     cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
+#         labels=targets, logits=predictions
+#     )
+    # return tf.reduce_sum(cross_entropy, axis=2)
+    return cross_entropy
 
 
 def apply_hard_mining(
