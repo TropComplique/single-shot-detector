@@ -163,7 +163,7 @@ class SSD:
             
             with slim.arg_scope([slim.conv2d], **params):
                 x1 = slim.conv2d(
-                    x, 64,
+                    x, 32,
                     [1, 1], scope='box_encoding_predictor1',
                     reuse=tf.AUTO_REUSE,
                     data_format='NCHW'

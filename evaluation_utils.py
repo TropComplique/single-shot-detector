@@ -32,7 +32,6 @@ class Evaluator:
     def evaluate(self, iou_threshold=0.5):
         metrics = {}
         for label in range(self.num_classes):
-            groundtruth_by_image =
             metrics[label] = evaluate_detector(
                 self.groundtruth_by_label_by_image[label],
                 self.detections_by_label[label], iou_threshold
@@ -66,7 +65,7 @@ class Evaluator:
 
         with tf.control_dependencies([evaluate_op]):
             eval_metric_ops = {
-                measure + '_' + str(label): (tf.py_func(get_value_func(label), [], tf.float32), update_op)
+                measure + '_' + str(label): (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
                 for label in range(self.num_classes) for measure in ['ap', 'best_precision', 'best_recall']
             }
         return eval_metric_ops
