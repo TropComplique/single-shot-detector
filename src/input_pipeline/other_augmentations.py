@@ -4,10 +4,10 @@ import tensorflow as tf
 def random_color_manipulations(image, probability=0.5, grayscale_probability=0.1):
 
     def manipulate(image):
-        image = tf.image.random_brightness(image, 0.2)
-        image = tf.image.random_contrast(image, 0.75, 1.3)
-        image = tf.image.random_hue(image, 0.15)
-        image = tf.image.random_saturation(image, 0.75, 1.3)
+        image = tf.image.random_brightness(image, 0.1)
+        image = tf.image.random_contrast(image, 0.8, 1.2)
+        image = tf.image.random_hue(image, 0.2)
+        image = tf.image.random_saturation(image, 0.8, 1.2)
         image = tf.clip_by_value(image, 0.0, 1.0)
         return image
 
@@ -113,7 +113,7 @@ def random_jitter_boxes(boxes, ratio=0.05):
 
 
 def random_black_patches(image, max_black_patches=10, probability=0.5, size_to_image_ratio=0.1):
-    """Randomly adds some black patches to the image.
+    """Randomly adds some black (colored) patches to the image.
 
     Arguments:
         image: a float tensor with shape [height, width, 3].
@@ -136,8 +136,12 @@ def random_black_patches(image, max_black_patches=10, probability=0.5, size_to_i
         normalized_x_min = tf.random_uniform([], minval=0.0, maxval=(1.0 - size_to_image_ratio))
         y_min = tf.to_int32(normalized_y_min * tf.to_float(image_height))
         x_min = tf.to_int32(normalized_x_min * tf.to_float(image_width))
-        black_box = tf.ones([box_size, box_size, 3], dtype=tf.float32)
-        mask = 1.0 - tf.image.pad_to_bounding_box(black_box, y_min, x_min, image_height, image_width)
+
+        random_color = tf.random_uniform([1, 1, 3], minval=-2.0, maxval=0.5, dtype=tf.float32)
+        black_box = tf.tile(random_color, [box_size, box_size, 1])
+        # black_box = tf.ones([box_size, box_size, 3], dtype=tf.float32)
+        black_box_padded = tf.image.pad_to_bounding_box(black_box, y_min, x_min, image_height, image_width)        
+        mask = 1.0 - black_box_padded
         image = tf.multiply(image, mask)
         return image
 

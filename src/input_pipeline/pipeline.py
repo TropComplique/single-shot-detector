@@ -129,10 +129,10 @@ class Pipeline:
 
         if params['do_random_crop']:
             image, boxes, labels = random_image_crop(
-                image, boxes, labels, probability=0.7,
-                min_object_covered=0.1,
+                image, boxes, labels, probability=0.8,
+                min_object_covered=0.0,
                 aspect_ratio_range=(0.85, 1.15),
-                area_range=(0.333, 0.9),
+                area_range=(0.333, 0.8),
                 overlap_thresh=0.3
             )
         image = tf.image.resize_images(
@@ -141,16 +141,16 @@ class Pipeline:
         )
 
         if params['do_random_color_manipulations']:
-            image = random_color_manipulations(image, probability=0.5, grayscale_probability=0.1)
+            image = random_color_manipulations(image, probability=0.7, grayscale_probability=0.07)
 
         if params['do_random_pixel_scale']:
-            image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.5)
+            image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.7)
 
         if params['do_random_jitter_boxes']:
             boxes = random_jitter_boxes(boxes, ratio=0.05)
 
         if params['do_random_black_patches']:
-            image = random_black_patches(image, max_black_patches=12, probability=0.5, size_to_image_ratio=0.1)
+            image = random_black_patches(image, max_black_patches=20, probability=0.5, size_to_image_ratio=0.1)
 
         image, boxes = random_flip_left_right(image, boxes)
         return image, boxes, labels

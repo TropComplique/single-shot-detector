@@ -52,7 +52,7 @@ estimator = tf.estimator.Estimator(model_fn, params=model_params, config=run_con
 
 
 train_spec = tf.estimator.TrainSpec(
-    train_input_fn, max_steps=15000,
+    train_input_fn, max_steps=18000,
     hooks=[train_iterator_initializer_hook]
 )
 eval_spec = tf.estimator.EvalSpec(

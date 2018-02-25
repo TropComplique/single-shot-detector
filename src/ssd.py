@@ -33,8 +33,7 @@ class SSD:
             # scores = tf.sigmoid(class_predictions_without_background)
 
             boxes, scores, classes, num_detections = batch_multiclass_non_max_suppression(
-                boxes, scores,
-                score_threshold, iou_threshold,
+                boxes, scores, score_threshold, iou_threshold,
                 max_boxes_per_class, self.num_classes
             )
             return {'boxes': boxes, 'labels': classes, 'scores': scores, 'num_boxes': num_detections}
@@ -138,40 +137,16 @@ class SSD:
         num_anchors_per_location = self.num_anchors_per_location
         num_feature_maps = len(feature_maps)
 
-        def batch_norm(x):
-            x = tf.layers.batch_normalization(
-                x, axis=1, center=True, scale=True,
-                momentum=BATCH_NORM_MOMENTUM, epsilon=0.001,
-                training=self.is_training, fused=True,
-                name='BatchNorm'
-            )
-            return x
-
-        params = {
-            'padding': 'SAME',
-            'activation_fn': tf.nn.relu6,
-            'normalizer_fn': batch_norm,
-            'data_format': 'NCHW'
-        }
-
         box_encodings, class_predictions_with_background = [], []
         for i, x, num_predictions_per_location in zip(range(num_feature_maps), feature_maps, num_anchors_per_location):
 
             batch_size = tf.shape(x)[0]
             height_i, width_i = x.shape.as_list()[2:]
             num_anchors_on_feature_map = height_i * width_i * num_predictions_per_location
-            
-            with slim.arg_scope([slim.conv2d], **params):
-                x1 = slim.conv2d(
-                    x, 32,
-                    [1, 1], scope='box_encoding_predictor1',
-                    reuse=tf.AUTO_REUSE,
-                    data_format='NCHW'
-                )
+
             y = slim.conv2d(
-                x1, num_predictions_per_location * 4,
-                [1, 1], activation_fn=None, scope='box_encoding_predictor2',
-                reuse=tf.AUTO_REUSE,
+                x, num_predictions_per_location * 4,
+                [1, 1], activation_fn=None, scope='box_encoding_predictor_%d' % i,
                 data_format='NCHW'
             )
             # it has shape [batch_size, num_predictions_per_location * 4, height_i, width_i]
@@ -182,8 +157,9 @@ class SSD:
 
             y = slim.conv2d(
                 x, num_predictions_per_location * (num_classes + 1),
-                [1, 1], activation_fn=None, scope='class_predictor',
+                [1, 1], activation_fn=None, scope='class_predictor_%d' % i,
                 reuse=tf.AUTO_REUSE,
+                biases_initializer=tf.constant_initializer(biases),
                 data_format='NCHW'
             )
             # it has  shape [batch_size, num_predictions_per_location * (num_classes + 1), height_i, width_i]

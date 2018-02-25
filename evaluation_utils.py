@@ -42,6 +42,19 @@ class Evaluator:
         self._initialize()
 
     def get_metric_ops(self, images, groundtruth, predictions):
+        """
+        Arguments:
+            images: a string tensor with shape [batch_size].
+            groundtruth: a dict with the following keys
+                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
+                'labels': an int tensor with shape [batch_size, max_num_boxes].
+                'num_boxes': an int tensor with shape [batch_size].
+            predictions: a dict with the following keys
+                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
+                'labels': an int tensor with shape [batch_size, max_num_boxes].
+                'scores': a float tensor with shape [batch_size, max_num_boxes].
+                'num_boxes': an int tensor with shape [batch_size].
+        """
 
         def update_op(images, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
             self.add_groundtruth(images, gt_boxes, gt_labels, gt_num_boxes)
@@ -58,15 +71,16 @@ class Evaluator:
             self.clear()
         evaluate_op = tf.py_func(evaluate_func, [], [])
 
-        def get_value_func(label=0, measure='ap'):
+        def get_value_func(label, measure):
             def value_func():
                 return np.float32(self.metrics[label][measure])
             return value_func
 
         with tf.control_dependencies([evaluate_op]):
+            metric_names = ['AP', 'precision', 'recall', 'mean_iou', 'threshold', 'FP', 'FN']
             eval_metric_ops = {
                 measure + '_' + str(label): (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
-                for label in range(self.num_classes) for measure in ['ap', 'best_precision', 'best_recall']
+                for label in range(self.num_classes) for measure in metric_names
             }
         return eval_metric_ops
 
@@ -107,7 +121,7 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
         all_detections: a list of boxes.
         iou_threshold: a float number.
     Returns:
-        a dict with four float numbers.
+        a dict with seven values.
     """
 
     # each ground truth box is either TP or FN
@@ -121,6 +135,7 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
 
     n_correct_detections = 0
     n_detections = 0
+    mean_iou = 0.0
     precision = [0.0]*len(all_detections)
     recall = [0.0]*len(all_detections)
     confidences = [box.confidence for box in all_detections]
@@ -136,33 +151,27 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
             groundtruth_boxes = []
 
         best_groundtruth_i, max_iou = match(detection, groundtruth_boxes)
-        detection.iou = max_iou
+        mean_iou += max_iou
 
         if best_groundtruth_i >= 0 and max_iou >= iou_threshold:
             box = groundtruth_boxes[best_groundtruth_i]
             if not box.is_matched:
                 box.is_matched = True
-                box.iou = max_iou
-                detection.is_matched = True
-                detection.type = 'TP'
                 n_correct_detections += 1  # increase number of TP
-            else:
-                detection.is_matched = False
-                detection.type = 'FP'
-        else:
-            detection.is_matched = False
-            detection.type = 'FP'
 
-        precision[k] = float(n_correct_detections)/float(n_detections)
-        recall[k] = float(n_correct_detections)/float(n_groundtruth_boxes)
+        precision[k] = float(n_correct_detections)/float(n_detections)  # TP/(TP + FP)
+        recall[k] = float(n_correct_detections)/float(n_groundtruth_boxes)  # TP/(TP + FN)
 
     ap = compute_ap(precision, recall)
     best_threshold, best_precision, best_recall = compute_best_threshold(
         precision, recall, confidences
     )
+    mean_iou /= max(n_detections, 1)
     return {
-        'ap': ap, 'best_precision': best_precision,
-        'best_recall': best_recall, 'best_threshold': best_threshold
+        'ap': ap, 'precision': best_precision,
+        'recall': best_recall, 'threshold': best_threshold,
+        'mean_iou': mean_iou, 'FP': n_detections - n_correct_detections,
+        'FN': n_groundtruth_boxes - n_correct_detections
     }
 
 
@@ -208,7 +217,6 @@ def match(detection, groundtruth_boxes):
     Arguments:
         detection: a box.
         groundtruth_boxes: a list of boxes.
-
     Returns:
         best_i: an integer, index of the best groundtruth box.
         max_iou: a float number.

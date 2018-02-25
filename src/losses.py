@@ -3,7 +3,8 @@ from .utils import batch_decode
 
 
 def localization_loss(predictions, targets, weights):
-    """
+    """A usual L1 smooth loss.
+
     Arguments:
         predictions: a float tensor with shape [batch_size, num_anchors, 4],
             representing the (encoded) predicted locations of objects.
@@ -64,7 +65,6 @@ def apply_hard_mining(
     Returns:
         two float tensors with shape [].
     """
-
     decoded_boxes = batch_decode(box_encodings, anchors)
     # it has shape [batch_size, num_anchors, 4]
 
@@ -79,6 +79,7 @@ def apply_hard_mining(
     num_positives_list, num_negatives_list = [], []
     mined_location_losses, mined_cls_losses = [], []
 
+    # do OHEM for each image in a batch
     for i, box_locations in enumerate(decoded_boxes_list):
         image_losses = cls_losses_list[i] * cls_loss_weight
         if loss_to_use == 'both':

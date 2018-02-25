@@ -12,12 +12,24 @@ import sys
 The purpose of this script is to create a .tfrecords file from a folder of images and
 a folder of annotations. Annotations are in the json format.
 
+Example of a json annotation (with filename "132416.json"):
+{
+  "object": [
+    {"bndbox": {"ymin": 20, "ymax": 276, "xmax": 1219, "xmin": 1131}, "name": "dog"},
+    {"bndbox": {"ymin": 1, "ymax": 248, "xmax": 1149, "xmin": 1014}, "name": "person"}
+  ],
+  "filename": "132416.jpg",
+  "size": {"depth": 3, "width": 1920, "height": 1080}
+}
+
 Example of use:
 python create_tfrecords.py \
-    --image_dir=/home/dan/datasets/datai/BBA_000/images_val/ \
-    --annotations_dir=/home/dan/datasets/datai/BBA_000/annotations_val/ \
+    --image_dir=/home/dan/datasets/BBA/images_val/ \
+    --annotations_dir=/home/dan/datasets/BBA/annotations_val/ \
     --output=data/val.tfrecords \
     --labels=data/labels.txt
+
+labels is a .txt file where each line is a class name.
 """
 
 
@@ -75,10 +87,16 @@ def dict_to_tf_example(annotation, image_dir, labels):
         print(annotation_name, 'is without any objects!')
 
     for obj in annotation['object']:
-        ymin.append(float(obj['bndbox']['ymin'])/height)
-        xmin.append(float(obj['bndbox']['xmin'])/width)
-        ymax.append(float(obj['bndbox']['ymax'])/height)
-        xmax.append(float(obj['bndbox']['xmax'])/width)
+        a = float(obj['bndbox']['ymin'])/height
+        b = float(obj['bndbox']['xmin'])/width
+        c = float(obj['bndbox']['ymax'])/height
+        d = float(obj['bndbox']['xmax'])/width
+        assert (a < c) and (b < d)
+
+        ymin.append(a)
+        xmin.append(b)
+        ymax.append(c)
+        xmax.append(d)
         try:
             classes.append(labels[obj['name']])
         except KeyError:
@@ -115,7 +133,7 @@ def main():
     with open(ARGS.labels, 'r') as f:
         labels = {line.strip(): i for i, line in enumerate(f.readlines()) if line.strip()}
     assert len(labels) > 0
-    print('Possible labels:', labels)
+    print('Possible labels (and label encoding):', labels)
 
     image_dir = ARGS.image_dir
     annotations_dir = ARGS.annotations_dir
