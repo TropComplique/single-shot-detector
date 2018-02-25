@@ -158,8 +158,6 @@ class SSD:
             y = slim.conv2d(
                 x, num_predictions_per_location * (num_classes + 1),
                 [1, 1], activation_fn=None, scope='class_predictor_%d' % i,
-                reuse=tf.AUTO_REUSE,
-                biases_initializer=tf.constant_initializer(biases),
                 data_format='NCHW'
             )
             # it has  shape [batch_size, num_predictions_per_location * (num_classes + 1), height_i, width_i]

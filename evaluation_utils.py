@@ -168,7 +168,7 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
     )
     mean_iou /= max(n_detections, 1)
     return {
-        'ap': ap, 'precision': best_precision,
+        'AP': ap, 'precision': best_precision,
         'recall': best_recall, 'threshold': best_threshold,
         'mean_iou': mean_iou, 'FP': n_detections - n_correct_detections,
         'FN': n_groundtruth_boxes - n_correct_detections

@@ -7,7 +7,7 @@
     "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
     "freeze": "MobilenetV1/Conv2d_[0-5][/_]",
 
-    "scales": [0.05, 0.1, 0.15, 0.25, 0.4, 0.6],
+    "scales": [0.1, 0.15, 0.25, 0.4, 0.6],
     "min_scale": 0.05, "max_scale": 0.8,
     "aspect_ratios": [1.5, 1.0, 0.6, 0.4, 0.3333, 0.25],
     "interpolated_scale_aspect_ratio": 1.0,

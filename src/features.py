@@ -34,7 +34,7 @@ class FeatureExtractor:
             )
             return x
 
-        filters = [64, 64, 64]
+        filters = [64, 64]
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
@@ -43,7 +43,7 @@ class FeatureExtractor:
         }
         with slim.arg_scope([slim.conv2d], **params):
             for i, num_filters in enumerate(filters, 14):
-                x = slim.conv2d(x, num_filters, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
+                # x = slim.conv2d(x, num_filters, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
                 x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d' % i)
                 image_features.append(x)
 

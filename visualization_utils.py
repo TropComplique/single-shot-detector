@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image, ImageDraw
+import tensorflow as tf
 
 
 def get_image_visualizer(images, predictions, max_outputs=64):

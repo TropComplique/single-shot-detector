@@ -1,5 +1,5 @@
 # SSD in tensorflow
-**Warning:** this implementation is working fine but isn't mature yet.
+**Warning:** this implementation works fine but isn't mature yet.
 
 ## Implementation details
 * This implementation uses `tf.estimator` and `tf.data` frameworks.
