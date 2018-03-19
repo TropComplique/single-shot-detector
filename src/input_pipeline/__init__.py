@@ -1,1 +1,1 @@
-from .pipeline import Pipeline
+from src.input_pipeline.pipeline import Pipeline

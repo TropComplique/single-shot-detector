@@ -12,7 +12,7 @@ class FeatureExtractor:
         """
         Arguments:
             images: a float tensor with shape [batch_size, 3, height, width],
-                a batch of RGB images with pixels values in the range [0, 1].
+                a batch of RGB images with pixel values in the range [0, 1].
         Returns:
             a list of float tensors where the ith tensor
             has shape [batch, channels_i, height_i, width_i].
@@ -43,7 +43,7 @@ class FeatureExtractor:
         }
         with slim.arg_scope([slim.conv2d], **params):
             for i, num_filters in enumerate(filters, 14):
-                # x = slim.conv2d(x, num_filters, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
+                x = slim.conv2d(x, num_filters, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
                 x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d' % i)
                 image_features.append(x)
 

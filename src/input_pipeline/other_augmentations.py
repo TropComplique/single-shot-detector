@@ -1,9 +1,18 @@
 import tensorflow as tf
 
+"""
+There are various data augmentations for training object detectors.
+
+`image` is assumed to be a float tensor with shape [height, width, 3],
+it is a RGB image with pixel values in range [0, 1].
+"""
+
 
 def random_color_manipulations(image, probability=0.5, grayscale_probability=0.1):
 
     def manipulate(image):
+        # intensity and order of this operations are kinda random,
+        # so you will need to tune this for you problem
         image = tf.image.random_brightness(image, 0.1)
         image = tf.image.random_contrast(image, 0.8, 1.2)
         image = tf.image.random_hue(image, 0.2)
@@ -56,11 +65,11 @@ def random_pixel_value_scale(image, minval=0.9, maxval=1.1, probability=0.5):
         a float tensor with shape [height, width, 3].
     """
     def random_value_scale(image):
-        color_coef = tf.random_uniform(
+        color_coefficient = tf.random_uniform(
             tf.shape(image), minval=minval,
             maxval=maxval, dtype=tf.float32
         )
-        image = tf.multiply(image, color_coef)
+        image = tf.multiply(image, color_coefficient)
         image = tf.clip_by_value(image, 0.0, 1.0)
         return image
 
@@ -74,60 +83,65 @@ def random_jitter_boxes(boxes, ratio=0.05):
     """Randomly jitter bounding boxes.
 
     Arguments:
-        boxes: a float tensor with [N, 4].
+        boxes: a float tensor with shape [N, 4].
         ratio: a float number.
             The ratio of the box width and height that the corners can jitter.
             For example if the width is 100 pixels and ratio is 0.05,
             the corners can jitter up to 5 pixels in the x direction.
     Returns:
-        a float tensor with [N, 4].
+        a float tensor with shape [N, 4].
     """
     def random_jitter_box(box, ratio):
         """Randomly jitter a box.
         Arguments:
-            box: a float tensor with shape [1, 1, 4].
+            box: a float tensor with shape [4].
             ratio: a float number.
         Returns:
-            a float tensor with shape [1, 1, 4].
+            a float tensor with shape [4].
         """
-        rand_numbers = tf.random_uniform(
-            [1, 1, 4], minval=-ratio, maxval=ratio, dtype=tf.float32
-        )
-        ymin, xmin, ymax, xmax = [box[0, 0, i] for i in range(4)]
+        ymin, xmin, ymax, xmax = [box[i] for i in range(4)]
         box_height, box_width = ymax - ymin, xmax - xmin
         hw_coefs = tf.stack([box_height, box_width, box_height, box_width])
+
+        rand_numbers = tf.random_uniform(
+            [4], minval=-ratio, maxval=ratio, dtype=tf.float32
+        )
         hw_rand_coefs = tf.multiply(hw_coefs, rand_numbers)
+
         jittered_box = tf.add(box, hw_rand_coefs)
-        jittered_box = tf.clip_by_value(jittered_box, 0.0, 1.0)
         return jittered_box
 
     with tf.name_scope('random_jitter_boxes'):
-        boxes = tf.expand_dims(boxes, 1)
-        boxes = tf.expand_dims(boxes, 2)  # shape [N, 1, 1, 4]
         distorted_boxes = tf.map_fn(
             lambda x: random_jitter_box(x, ratio),
-            boxes, dtype=tf.float32
+            boxes, dtype=tf.float32, back_prop=False
         )
-        distorted_boxes = tf.squeeze(distorted_boxes, axis=[1, 2])
+        distorted_boxes = tf.clip_by_value(distorted_boxes, 0.0, 1.0)
         return distorted_boxes
 
 
-def random_black_patches(image, max_black_patches=10, probability=0.5, size_to_image_ratio=0.1):
-    """Randomly adds some black (colored) patches to the image.
+def random_colored_patches(
+        image, max_patches=10,
+        probability=0.5, size_to_image_ratio=0.1,
+        only_black=False):
+    """Randomly adds some colored (or only black) patches to the image.
+
+    Note: colored patches are not 'true' colored patches,
+    try this function and see for yourself.
 
     Arguments:
         image: a float tensor with shape [height, width, 3].
-        max_black_patches: an integer, number of times that the
-            function tries to add a black box to the image.
+        max_patches: an integer, number of times that the
+            function tries to add a patch to the image.
         probability: at each try, what is the chance of adding a box.
-        size_to_image_ratio: determines the ratio of the size of the black patches
+        size_to_image_ratio: determines the ratio of the size of the patches
             to the size of the image. box_size = size_to_image_ratio * min(width, height).
+        only_black: a boolean.
     Returns:
         a float tensor with shape [height, width, 3].
     """
-    def add_black_patch_to_image(image):
-        image_shape = tf.shape(image)
-        image_height, image_width = image_shape[0], image_shape[1]
+    def add_patch_to_image(image):
+        image_height, image_width = image.shape.as_list()[:2]
         box_size = tf.to_int32(tf.multiply(
             tf.minimum(tf.to_float(image_height), tf.to_float(image_width)),
             size_to_image_ratio
@@ -137,18 +151,26 @@ def random_black_patches(image, max_black_patches=10, probability=0.5, size_to_i
         y_min = tf.to_int32(normalized_y_min * tf.to_float(image_height))
         x_min = tf.to_int32(normalized_x_min * tf.to_float(image_width))
 
-        random_color = tf.random_uniform([1, 1, 3], minval=-2.0, maxval=0.5, dtype=tf.float32)
-        black_box = tf.tile(random_color, [box_size, box_size, 1])
-        # black_box = tf.ones([box_size, box_size, 3], dtype=tf.float32)
-        black_box_padded = tf.image.pad_to_bounding_box(black_box, y_min, x_min, image_height, image_width)        
+        if only_black:
+            black_box = tf.ones([box_size, box_size, 3], dtype=tf.float32)
+        else:
+            # values -2.0 and 0.5 are kinda meaningless (or not)
+            random_color = tf.random_uniform([1, 1, 3], minval=-2.0, maxval=0.5, dtype=tf.float32)
+            black_box = tf.tile(random_color, [box_size, box_size, 1])
+
+        black_box_padded = tf.image.pad_to_bounding_box(black_box, y_min, x_min, image_height, image_width)
         mask = 1.0 - black_box_padded
+
+        # well, you could try something like
+        # image = tf.multiply(image, tf.to_float(tf.equal(mask, 1.0))) + black_box_padded
+        # but it is too slow!
+
         image = tf.multiply(image, mask)
         return image
 
-    with tf.name_scope('random_black_patches'):
-        for _ in range(max_black_patches):
+    with tf.name_scope('random_colored_patches'):
+        for _ in range(max_patches):
             do_it = tf.less(tf.random_uniform([]), probability)
-            image = tf.cond(do_it, lambda: add_black_patch_to_image(image), lambda: image)
-
+            image = tf.cond(do_it, lambda: add_patch_to_image(image), lambda: image)
         image = tf.clip_by_value(image, 0.0, 1.0)
         return image

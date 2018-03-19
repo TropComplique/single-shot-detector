@@ -64,7 +64,7 @@ def dict_to_tf_example(annotation, image_dir, labels):
         an instance of tf.Example.
     """
     image_name = annotation['filename']
-    assert image_name.endswith('.jpg')
+    assert image_name.endswith('.jpg') or image_name.endswith('.jpeg')
 
     image_path = os.path.join(image_dir, image_name)
     with tf.gfile.GFile(image_path, 'rb') as f:
@@ -82,7 +82,8 @@ def dict_to_tf_example(annotation, image_dir, labels):
     assert image.size[0] == width and image.size[1] == height
     ymin, xmin, ymax, xmax, classes = [], [], [], [], []
 
-    annotation_name = image_name[:-4] + '.json'
+    just_name = image_name[:-4] if image_name.endswith('.jpg') else image_name[:-5]
+    annotation_name = just_name + '.json'
     if len(annotation['object']) == 0:
         print(annotation_name, 'is without any objects!')
 

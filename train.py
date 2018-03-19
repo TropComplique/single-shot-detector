@@ -8,16 +8,18 @@ tf.logging.set_verbosity('INFO')
 
 params = json.load(open('config.json'))
 model_params = params['model_params']
-input_pipeline_params = params['input_pipeline_params']
+input_params = params['input_pipeline_params']
 
 
 def get_input_fn(is_training=True):
 
-    image_size = input_pipeline_params['image_size']
+    image_size = input_params['image_size']
     iterator_initializer_hook = IteratorInitializerHook()
-    filename = 'data/train.tfrecords' if is_training else 'data/val.tfrecords'
-    batch_size = input_pipeline_params['batch_size'] if is_training else 64
-    augmentation = input_pipeline_params if is_training else None
+    filename = input_params['train_dataset'] if is_training else input_params['val_dataset']
+    batch_size = input_params['batch_size'] if is_training else 1
+
+    if not is_training:
+        assert batch_size == 1
 
     def input_fn():
         with tf.device('/cpu:0'), tf.name_scope('input_pipeline'):
@@ -25,7 +27,7 @@ def get_input_fn(is_training=True):
                 filename,
                 batch_size=batch_size, image_size=image_size,
                 repeat=is_training, shuffle=is_training,
-                augmentation=augmentation
+                augmentation=is_training
             )
             features, labels = pipeline.get_batch()
         iterator_initializer_hook.iterator_initializer_func = lambda sess: sess.run(pipeline.init)
@@ -52,7 +54,7 @@ estimator = tf.estimator.Estimator(model_fn, params=model_params, config=run_con
 
 
 train_spec = tf.estimator.TrainSpec(
-    train_input_fn, max_steps=18000,
+    train_input_fn, max_steps=input_params['num_steps'],
     hooks=[train_iterator_initializer_hook]
 )
 eval_spec = tf.estimator.EvalSpec(

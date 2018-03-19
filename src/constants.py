@@ -15,10 +15,10 @@ SCALE_FACTORS = [10.0, 10.0, 5.0, 5.0]
 SHUFFLE_BUFFER_SIZE = 1000
 PREFETCH_BUFFER_SIZE = 100
 NUM_THREADS = 8
-# read here about buffer sizes:
+# read here about the buffer sizes:
 # stackoverflow.com/questions/46444018/meaning-of-buffer-size-in-dataset-map-dataset-prefetch-and-dataset-shuffle
 
-# images are resized before feeding to the network
+# images are resized before feeding them to the network
 RESIZE_METHOD = tf.image.ResizeMethod.NEAREST_NEIGHBOR
 
 # threshold for IoU when creating training targets
@@ -27,5 +27,5 @@ MATCHING_THRESHOLD = 0.5
 # this is used in tf.map_fn when creating training targets or doing NMS
 PARALLEL_ITERATIONS = 8
 
-# this is important
+# this can be important
 BATCH_NORM_MOMENTUM = 0.9

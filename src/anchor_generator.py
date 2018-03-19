@@ -8,12 +8,12 @@ class AnchorGenerator:
                  interpolated_scale_aspect_ratio=1.0,
                  reduce_boxes_in_lowest_layer=True):
         """Creates SSD anchors.
-
-        Grid sizes are assumed to be passed in at generation time from finest resolution
-        to coarsest resolution --- this is used to (linearly) interpolate scales of anchor boxes.
+        Grid sizes are assumed to be passed in at generation
+        time from finest resolution to coarsest resolution.
 
         Arguments:
-            scales: a list of float numbers or None.
+            scales: a list of float numbers or None,
+                if scales is None then min_scale and max_scale are used.
             min_scale: a float number, scale of anchors corresponding to finest resolution.
             max_scale: a float number, scale of anchors corresponding to coarsest resolution.
             aspect_ratios: a list or tuple of float numbers, aspect ratios to place on each grid point.
@@ -30,22 +30,22 @@ class AnchorGenerator:
         self.interpolated_scale_aspect_ratio = interpolated_scale_aspect_ratio
         self.reduce_boxes_in_lowest_layer = reduce_boxes_in_lowest_layer
 
-    def __call__(self, image_features, images):
+    def __call__(self, image_features, image_size):
         """
         Arguments:
             image_features: a list of float tensors where the ith tensor
                 has shape [batch, channels_i, height_i, width_i].
-            images:  a float tensor with shape [batch_size, 3, height, width].
+            image_size: a tuple of integers (width, height).
         Returns:
             a float tensor with shape [num_anchor, 4],
-            boxes with normalized coordinates (clipped to the unit square).
+            boxes with normalized coordinates (and clipped to the unit square).
         """
         feature_map_shape_list = []
         num_layers = len(image_features)
         for feature_map in image_features:
             height_i, width_i = feature_map.shape.as_list()[2:]
             feature_map_shape_list.append((height_i, width_i))
-        h, w = images.shape.as_list()[2:]
+        w, h = image_size
         image_aspect_ratio = w/h
 
         scales = self.scales
@@ -56,36 +56,45 @@ class AnchorGenerator:
             ]
         assert len(scales) == num_layers
         scales = scales + [1.0]
-
         box_specs_list = self._get_box_specs(scales)
-
-        anchor_grid_list, num_anchors_per_feature_map = [], []
-        for grid_size, box_spec in zip(feature_map_shape_list, box_specs_list):
-            scales, aspect_ratios = zip(*box_spec)
-            h, w = grid_size
-            stride = (1.0/tf.to_float(h), 1.0/tf.to_float(w))
-            offset = (0.5 * stride[0], 0.5 * stride[1])
-            anchor_grid_list.append(tile_anchors(
-                image_aspect_ratio, grid_size[0], grid_size[1],
-                scales, aspect_ratios, stride, offset
-            ))
-            num_anchors_per_feature_map.append(grid_size[0] * grid_size[1] * len(scales))
-
+        # number of anchors per cell in a grid
         self.num_anchors_per_location = [len(layer_box_specs) for layer_box_specs in box_specs_list]
-        self.feature_map_shape_list = feature_map_shape_list
-        self.num_anchors_per_feature_map = num_anchors_per_feature_map
+
+        with tf.name_scope('anchor_generator'):
+            anchor_grid_list, num_anchors_per_feature_map = [], []
+            for grid_size, box_spec in zip(feature_map_shape_list, box_specs_list):
+                scales, aspect_ratios = zip(*box_spec)
+                h, w = grid_size
+                stride = (1.0/tf.to_float(h), 1.0/tf.to_float(w))
+                offset = (0.5/tf.to_float(h), 0.5/tf.to_float(w))
+                anchor_grid_list.append(tile_anchors(
+                    image_aspect_ratio=image_aspect_ratio,
+                    grid_height=h, grid_width=w, scales=scales,
+                    aspect_ratios=aspect_ratios, anchor_stride=stride,
+                    anchor_offset=offset
+                ))
+                num_anchors_per_feature_map.append(h * w * len(scales))
+
+        # constant tensors, anchors for each feature map
         self.anchor_grid_list = anchor_grid_list
+        self.num_anchors_per_feature_map = num_anchors_per_feature_map
 
         anchors = tf.concat(anchor_grid_list, axis=0)
         anchors = tf.clip_by_value(anchors, 0.0, 1.0)
         return anchors
 
     def _get_box_specs(self, scales):
+        """
+        Arguments:
+            scales: a list of floats, it has length num_layers + 1.
+        Returns:
+            a list of lists of tuples (scale, aspect ratio).
+        """
         box_specs_list = []
         for layer, (scale, scale_next) in enumerate(zip(scales[:-1], scales[1:])):
             layer_box_specs = []
             if layer == 0 and self.reduce_boxes_in_lowest_layer:
-                layer_box_specs = [(0.1, 1.0), (scale, 2.0), (scale, 0.5)]
+                layer_box_specs = [(scale, 1.0), (scale, 2.0), (scale, 0.5)]
             else:
                 for aspect_ratio in self.aspect_ratios:
                     layer_box_specs.append((scale, aspect_ratio))
@@ -95,20 +104,21 @@ class AnchorGenerator:
         return box_specs_list
 
 
-def tile_anchors(image_aspect_ratio, grid_height, grid_width, scales, aspect_ratios, anchor_stride, anchor_offset):
-    """Create a tiled set of anchors strided along a grid in image space.
-
+def tile_anchors(
+        image_aspect_ratio, grid_height, grid_width,
+        scales, aspect_ratios, anchor_stride, anchor_offset):
+    """
     Arguments:
         image_aspect_ratio: a float tensor with shape [].
-        grid_height: size of the grid in the y direction (an integer or int scalar tensor).
-        grid_width: size of the grid in the x direction (an integer or int scalar tensor).
+        grid_height: an integer, size of the grid in the y direction.
+        grid_width: an integer, size of the grid in the x direction.
         scales: a float tensor with shape [N],
             it represents the scale of each box in the basis set.
         aspect_ratios: a float tensor with shape [N],
             it represents the aspect ratio of each box in the basis set.
-        anchor_stride: a float tensor with shape [2], difference in centers between
-            base anchors for adjacent grid positions.
-        anchor_offset: a float tensor with shape [2],
+        anchor_stride: a tuple of float numbers, difference in centers between
+            anchors for adjacent grid positions.
+        anchor_offset: a tuple of float numbers,
             center of the anchor on upper left element of the grid ((0, 0)-th anchor).
     Returns:
         a float tensor with shape [N * grid_height * grid_width, 4].

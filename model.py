@@ -56,7 +56,7 @@ def model_fn(features, labels, mode, params, config):
             'boxes': 'detection_boxes', 'scores': 'detection_scores',
             'labels': 'detection_classes', 'num_boxes': 'num_detections'
         }
-        # this is required for exporting savedmodel
+        # this is required for exporting a savedmodel
         export_outputs = tf.estimator.export.PredictOutput({
             name: tf.identity(tensor, name_map[name])
             for name, tensor in predictions.items()
@@ -81,18 +81,23 @@ def model_fn(features, labels, mode, params, config):
     total_loss = tf.losses.get_total_loss(add_regularization_losses=True)
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        evaluator = Evaluator(params['num_classes'])
-        with tf.name_scope('image_drawer'):
-            image_summary = get_image_visualizer(features['images'], predictions)
-            summary_hook = tf.train.SummarySaverHook(
-                save_steps=10, output_dir=os.path.join(config.model_dir, 'eval'),
-                summary_op=image_summary
-            )
+        evaluator = Evaluator(num_classes=params['num_classes'])
+        image_visualizer = ImageVisualizer(num_images_to_show=50)
+
+        images = features['images']
+        batch_size = images.shape.as_list()[0]
+        assert batch_size == 1
+
         with tf.name_scope('evaluator'):
             eval_metric_ops = evaluator.get_metric_ops(features['filenames'], labels, predictions)
+
+        with tf.name_scope('image_drawer'):
+            image_visualizer_ops = image_visualizer.get_ops(images, predictions)
+            eval_metric_ops.update(image_visualizer_ops)
+
         return tf.estimator.EstimatorSpec(
-            mode, loss=total_loss, eval_metric_ops=eval_metric_ops,
-            evaluation_hooks=[summary_hook]
+            mode, loss=total_loss,
+            eval_metric_ops=eval_metric_ops
         )
 
     assert mode == tf.estimator.ModeKeys.TRAIN

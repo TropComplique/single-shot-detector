@@ -29,11 +29,8 @@
   "input_pipeline_params": {
     "image_size": [640, 384],
     "batch_size": 24,
-
-    "do_random_crop": true,
-    "do_random_color_manipulations": true,
-    "do_random_pixel_scale": true,
-    "do_random_jitter_boxes": true,
-    "do_random_black_patches": true
+    "train_dataset": "data/train.tfrecords",
+    "val_dataset": "data/val.tfrecords",
+    "num_steps": 18000
   }
 }

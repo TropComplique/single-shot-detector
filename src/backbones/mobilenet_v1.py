@@ -1,13 +1,15 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+
 from src.constants import BATCH_NORM_MOMENTUM
+from src.backbones.depthwise_conv import depthwise_conv
 
 
 def mobilenet_v1_base(images, is_training, depth_multiplier=1.0, min_depth=8):
     """
     Arguments:
         images: a float tensor with shape [batch_size, 3, height, width],
-            a batch of RGB images with pixels values in the range [0, 1].
+            a batch of RGB images with pixel values in the range [0, 1].
         is_training: a boolean.
         depth_multiplier: a float number, multiplier for the number of filters in a layer.
         min_depth: an integer, the minimal number of filters in a layer.
@@ -17,7 +19,7 @@ def mobilenet_v1_base(images, is_training, depth_multiplier=1.0, min_depth=8):
     """
 
     def depth(x):
-        """Get the number of filters for a layer."""
+        """Reduce the number of filters in a layer."""
         return max(int(x * depth_multiplier), min_depth)
 
     def preprocess(images):
@@ -33,18 +35,18 @@ def mobilenet_v1_base(images, is_training, depth_multiplier=1.0, min_depth=8):
         )
         return x
 
-    with tf.variable_scope('MobilenetV1', values=[images]):
+    with tf.name_scope('standardize_input'):
+        x = preprocess(images)
+
+    with tf.variable_scope('MobilenetV1'):
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
             'normalizer_fn': batch_norm,
             'data_format': 'NCHW'
         }
-        with slim.arg_scope([slim.conv2d], **params):
+        with slim.arg_scope([slim.conv2d, depthwise_conv], **params):
             features = {}
-
-            with tf.name_scope('standardize_input'):
-                x = preprocess(images)
 
             layer_name = 'Conv2d_0'
             x = slim.conv2d(x, depth(32), (3, 3), stride=2, scope=layer_name)
@@ -60,10 +62,7 @@ def mobilenet_v1_base(images, is_training, depth_multiplier=1.0, min_depth=8):
             for i, (stride, num_filters) in enumerate(strides_and_filters, 1):
 
                 layer_name = 'Conv2d_%d_depthwise' % i
-                with tf.variable_scope(layer_name):
-                    x = _depthwise_conv(x, strides=stride)
-                    x = batch_norm(x)
-                    x = tf.nn.relu6(x)
+                x = depthwise_conv(x, stride=stride, scope=layer_name)
                 features[layer_name] = x
 
                 layer_name = 'Conv2d_%d_pointwise' % i
@@ -71,15 +70,3 @@ def mobilenet_v1_base(images, is_training, depth_multiplier=1.0, min_depth=8):
                 features[layer_name] = x
 
     return x, features
-
-
-def _depthwise_conv(x, kernel=3, strides=1, padding='SAME'):
-    in_channels = x.shape.as_list()[1]
-    W = tf.get_variable(
-        'depthwise_weights',
-        [kernel, kernel, in_channels, 1],
-        tf.float32
-    )
-    # why not [1, strides, strides, 1] ?
-    x = tf.nn.depthwise_conv2d(x, W, [1, 1, strides, strides], padding, data_format='NCHW')
-    return x

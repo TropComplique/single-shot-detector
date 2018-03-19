@@ -1,5 +1,5 @@
 import tensorflow as tf
-from .utils import batch_decode
+from src.utils import batch_decode
 
 
 def localization_loss(predictions, targets, weights):
@@ -31,12 +31,10 @@ def classification_loss(predictions, targets):
     Returns:
         a float tensor with shape [batch_size, num_anchors].
     """
-    cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=targets, logits=predictions)
-    # cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-    #     labels=targets, logits=predictions
-    # )
-    # return tf.reduce_sum(cross_entropy, axis=2)
-    return cross_entropy
+    cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
+        labels=targets, logits=predictions
+    )
+    return tf.reduce_sum(cross_entropy, axis=2)
 
 
 def apply_hard_mining(
@@ -79,7 +77,7 @@ def apply_hard_mining(
     num_positives_list, num_negatives_list = [], []
     mined_location_losses, mined_cls_losses = [], []
 
-    # do OHEM for each image in a batch
+    # do OHEM for each image in the batch
     for i, box_locations in enumerate(decoded_boxes_list):
         image_losses = cls_losses_list[i] * cls_loss_weight
         if loss_to_use == 'both':

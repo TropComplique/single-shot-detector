@@ -39,7 +39,7 @@ def _random_crop_image(
     form (e.g., lie in the unit square [0, 1]).
 
     Arguments:
-        image: a float tensor containing 1 image of shape [height, width, channels]
+        image: a float tensor with shape [height, width, 3],
             with pixel values varying between [0, 1].
         boxes: a float tensor containing bounding boxes. It has shape
             [num_boxes, 4]. Boxes are in normalized form, meaning

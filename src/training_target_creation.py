@@ -1,8 +1,8 @@
 import tensorflow as tf
-from .utils import encode, iou
+from src.utils import encode, iou
 
 
-def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, threshold=0.5):
+def get_training_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, threshold=0.5):
     """
     Arguments:
         anchors: a float tensor with shape [num_anchors, 4].
@@ -13,7 +13,8 @@ def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, thr
     Returns:
         cls_targets: a float tensor with shape [num_anchors, num_classes + 1].
         reg_targets: a float tensor with shape [num_anchors, 4].
-        matches: an int tensor with shape [num_anchors].
+        matches: an int tensor with shape [num_anchors], possible values
+            that it can contain are [-1, 0, 1, 2, ..., (N - 1)].
     """
     with tf.name_scope('matching'):
         N = tf.shape(groundtruth_boxes)[0]
@@ -23,6 +24,7 @@ def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, thr
             lambda: _match(anchors, groundtruth_boxes, threshold),
             lambda: -1 * tf.ones([num_anchors], dtype=tf.int32)
         )
+        matches = tf.to_int32(matches)
 
     with tf.name_scope('reg_and_cls_target_creation'):
         reg_targets, cls_targets = _create_targets(
@@ -34,7 +36,16 @@ def get_targets(anchors, groundtruth_boxes, groundtruth_labels, num_classes, thr
 
 
 def _match(anchors, groundtruth_boxes, threshold=0.5):
-    """
+    """Matching algorithm:
+    1) for each groundtruth box choose the anchor with largest iou,
+    2) remove this set of anchors from all anchors,
+    3) for each remaining anchor choose the groundtruth box with largest iou,
+       but only if this iou is larger than `threshold`.
+
+    Note: after step 1, it could happen that for some two groundtruth boxes
+    chosen anchors are the same. Let's hope this never happens.
+    See comments below.
+
     Arguments:
         anchors: a float tensor with shape [num_anchors, 4].
         groundtruth_boxes: a float tensor with shape [N, 4].
@@ -42,11 +53,11 @@ def _match(anchors, groundtruth_boxes, threshold=0.5):
     Returns:
         an int tensor with shape [num_anchors].
     """
-    num_anchors = anchors.shape[0]
+    num_anchors = anchors.shape.as_list()[0]
 
     # for each anchor box choose the groundtruth box with largest iou
     similarity_matrix = iou(groundtruth_boxes, anchors)  # shape [N, num_anchors]
-    matches = tf.to_int32(tf.argmax(similarity_matrix, axis=0))  # shape [num_anchors]
+    matches = tf.argmax(similarity_matrix, axis=0, output_type=tf.int32)  # shape [num_anchors]
     matched_vals = tf.reduce_max(similarity_matrix, axis=0)  # shape [num_anchors]
     below_threshold = tf.to_int32(tf.greater(threshold, matched_vals))
     matches = tf.add(tf.multiply(matches, 1 - below_threshold), -1 * below_threshold)
@@ -59,27 +70,16 @@ def _match(anchors, groundtruth_boxes, threshold=0.5):
 
     # for each groundtruth box choose the anchor box with largest iou
     # (force match for each groundtruth box)
-    forced_matches_ids = tf.to_int32(tf.argmax(similarity_matrix, 1))  # shape [N]
+    forced_matches_ids = tf.argmax(similarity_matrix, axis=1, output_type=tf.int32)  # shape [N]
+    # if all indices in forced_matches_ids are different then all rows will be matched
 
-    col_range = tf.range(tf.shape(similarity_matrix)[1], dtype=tf.int32)
-    keep_matches_ids, _ = tf.setdiff1d(col_range, forced_matches_ids)
-    # note: `col_range` equals to disjoint union of `forced_matches_ids` and `keep_matches_ids`,
-    # `keep_matches_ids` - anchor boxes that have no forced groundtruth boxes
+    forced_matches_indicators = tf.one_hot(forced_matches_ids, depth=num_anchors, dtype=tf.int32)  # shape [N, num_anchors]
+    forced_match_row_ids = tf.argmax(forced_matches_indicators, axis=0, output_type=tf.int32)  # shape [num_anchors]
+    forced_match_mask = tf.greater(tf.reduce_max(forced_matches_indicators, axis=0), 0)  # shape [num_anchors]
+    matches = tf.where(forced_match_mask, forced_match_row_ids, matches)
+    # even after this it could happen that some rows aren't matched,
+    # but i believe that this event has low probability
 
-    forced_matches_values = tf.range(tf.shape(similarity_matrix)[0], dtype=tf.int32)
-    keep_matches_values = tf.gather(matches, keep_matches_ids)
-
-    # set matches[forced_matches_ids] = [0, 1, 2, ..., N].
-    matches = tf.dynamic_stitch(
-        [forced_matches_ids, keep_matches_ids],
-        [forced_matches_values, keep_matches_values]
-    )
-    # in other words:
-    # matches[forced_matches_ids[i]] = forced_matches_values[i]
-    # matches[keep_matches_ids[i]] = keep_matches_values[i]
-
-    # so, in the end, we matched each row to at least one column
-    matches.set_shape(num_anchors)
     return matches
 
 
@@ -96,7 +96,7 @@ def _create_targets(anchors, groundtruth_boxes, groundtruth_labels, matches, num
         cls_targets: a float tensor with shape [num_anchors, num_classes + 1].
         reg_targets: a float tensor with shape [num_anchors, 4].
     """
-    num_anchors = anchors.shape[0]
+    num_anchors = anchors.shape.as_list()[0]
 
     matched_anchor_indices = tf.where(tf.greater_equal(matches, 0))  # shape [num_matches, 1]
     matched_anchor_indices = tf.squeeze(matched_anchor_indices, axis=1)
@@ -124,7 +124,7 @@ def _create_targets(anchors, groundtruth_boxes, groundtruth_labels, matches, num
     matched_cls_targets = tf.gather(groundtruth_labels, matched_gt_indices)
     # it has shape [num_matches, num_classes]
 
-    matched_cls_targets = tf.pad(matched_cls_targets, tf.constant([[0, 0], [1, 0]]))
+    matched_cls_targets = tf.pad(matched_cls_targets, [[0, 0], [1, 0]])
     # it has shape [num_matches, num_classes + 1]
 
     # one-hot encoding for background class

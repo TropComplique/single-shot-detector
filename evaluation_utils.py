@@ -6,7 +6,7 @@ class Box:
     def __init__(self, image, box, score=None):
         """
         Arguments:
-            image: a string.
+            image: a string, identifier of the image.
             box: a numpy float array with shape [4].
             score: a float number or None.
         """
@@ -41,24 +41,24 @@ class Evaluator:
     def clear(self):
         self._initialize()
 
-    def get_metric_ops(self, images, groundtruth, predictions):
+    def get_metric_ops(self, image_name, groundtruth, predictions):
         """
         Arguments:
-            images: a string tensor with shape [batch_size].
+            image_name: a string tensor with shape [].
             groundtruth: a dict with the following keys
-                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
-                'labels': an int tensor with shape [batch_size, max_num_boxes].
-                'num_boxes': an int tensor with shape [batch_size].
+                'boxes': a float tensor with shape [max_num_boxes, 4].
+                'labels': an int tensor with shape [max_num_boxes].
+                'num_boxes': an int tensor with shape [].
             predictions: a dict with the following keys
-                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
-                'labels': an int tensor with shape [batch_size, max_num_boxes].
-                'scores': a float tensor with shape [batch_size, max_num_boxes].
-                'num_boxes': an int tensor with shape [batch_size].
+                'boxes': a float tensor with shape [max_num_boxes, 4].
+                'labels': an int tensor with shape [max_num_boxes].
+                'scores': a float tensor with shape [max_num_boxes].
+                'num_boxes': an int tensor with shape [].
         """
 
-        def update_op(images, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
-            self.add_groundtruth(images, gt_boxes, gt_labels, gt_num_boxes)
-            self.add_detections(images, boxes, labels, scores, num_boxes)
+        def update_op(image_name, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
+            self.add_groundtruth(image_name, gt_boxes, gt_labels, gt_num_boxes)
+            self.add_detections(image_name, boxes, labels, scores, num_boxes)
 
         tensors = [
             images, groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes'],
@@ -88,29 +88,27 @@ class Evaluator:
         self.detections_by_label = {label: [] for label in range(self.num_classes)}
         self.groundtruth_by_label_by_image = {label: {} for label in range(self.num_classes)}
 
-    def add_groundtruth(self, images, boxes, labels, num_boxes):
-        batch_size = len(images)
-        for i, n, image in zip(range(batch_size), num_boxes, images):
-            for box, label in zip(boxes[i][:n], labels[i][:n]):
-                groundtruth_by_image = self.groundtruth_by_label_by_image[label]
-                if image in groundtruth_by_image:
-                    groundtruth_by_image[image] += [Box(image, box)]
-                else:
-                    groundtruth_by_image[image] = [Box(image, box)]
+    def add_groundtruth(self, image_name, boxes, labels, num_boxes):
+        boxes, labels = boxes[:num_boxes], labels[:num_boxes]
+        for box, label in zip(boxes, labels):
+            groundtruth_by_image = self.groundtruth_by_label_by_image[label]
+            if image_name in groundtruth_by_image:
+                groundtruth_by_image[image_name] += [Box(image_name, box)]
+            else:
+                groundtruth_by_image[image_name] = [Box(image_name, box)]
 
-    def add_detections(self, images, boxes, labels, scores, num_boxes):
+    def add_detections(self, image_name, boxes, labels, scores, num_boxes):
         """
         Arguments:
-            images: a numpy string array with shape [batch_size].
-            boxes: a numpy float array with shape [batch_size, N, 4].
-            labels: a numpy int array with shape [batch_size, N].
-            scores: a numpy float array with shape [batch_size, N].
-            num_boxes: a numpy int array with shape [batch_size].
+            images: a numpy string array with shape [].
+            boxes: a numpy float array with shape [N, 4].
+            labels: a numpy int array with shape [N].
+            scores: a numpy float array with shape [N].
+            num_boxes: a numpy int array with shape [].
         """
-        batch_size = len(images)
-        for i, n, image in zip(range(batch_size), num_boxes, images):
-            for box, label, score in zip(boxes[i][:n], labels[i][:n], scores[i][:n]):
-                self.detections_by_label[label] += [Box(image, box, score)]
+        boxes, labels, scores = boxes[:num_boxes], labels[:num_boxes], scores[:num_boxes]
+        for box, label, score in zip(boxes, labels, scores):
+            self.detections_by_label[label] += [Box(image_name, box, score)]
 
 
 def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
