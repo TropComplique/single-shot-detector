@@ -78,9 +78,9 @@ class Evaluator:
 
         with tf.control_dependencies([evaluate_op]):
             metric_names = ['AP', 'precision', 'recall', 'mean_iou', 'threshold', 'FP', 'FN']
-            metric_names = ['metrics/' + name for name in metric_names]
             eval_metric_ops = {
-                measure + '_' + str(label): (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
+                'metrics/' + measure + '_' + str(label):
+                (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
                 for label in range(self.num_classes) for measure in metric_names
             }
         return eval_metric_ops

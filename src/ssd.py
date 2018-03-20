@@ -124,7 +124,7 @@ class SSD:
             index += n
 
     def _add_scalewise_matches_summaries(self, weights):
-        """Adds summaries about the number of matches for each scale."""
+        """Adds summaries for the number of matches on each scale."""
         index = 0
         for i, n in enumerate(self.num_anchors_per_feature_map):
             matches_per_image = tf.reduce_sum(weights[:, index:(index + n)], axis=1)
