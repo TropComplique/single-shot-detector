@@ -17,9 +17,7 @@ def get_input_fn(is_training=True):
     iterator_initializer_hook = IteratorInitializerHook()
     filename = input_params['train_dataset'] if is_training else input_params['val_dataset']
     batch_size = input_params['batch_size'] if is_training else 1
-
-    if not is_training:
-        assert batch_size == 1
+    # for evaluation it's important to set batch_size to 1
 
     def input_fn():
         with tf.device('/cpu:0'), tf.name_scope('input_pipeline'):

@@ -7,9 +7,9 @@
     "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
     "freeze": "MobilenetV1/Conv2d_[0-5][/_]",
 
-    "scales": [0.1, 0.15, 0.25, 0.4, 0.6],
-    "min_scale": 0.05, "max_scale": 0.8,
-    "aspect_ratios": [1.5, 1.0, 0.6, 0.4, 0.3333, 0.25],
+    "scales": [0.1, 0.15, 0.25, 0.4, 0.6, 0.9],
+    "min_scale": 0.05, "max_scale": 0.9,
+    "aspect_ratios": [1.5, 1.0, 0.6, 0.4, 0.3333, 0.25, 2.0],
     "interpolated_scale_aspect_ratio": 1.0,
     "reduce_boxes_in_lowest_layer": false,
 
@@ -22,15 +22,15 @@
     "num_hard_examples": 200, "nms_threshold": 0.99,
     "max_negatives_per_positive": 3.0, "min_negatives_per_image": 50,
 
-    "lr_boundaries": [6000, 12000, 15000, 17000],
+    "lr_boundaries": [60000, 120000, 150000, 170000],
     "lr_values": [0.009, 0.005, 0.001, 0.0005, 0.0001]
   },
 
   "input_pipeline_params": {
-    "image_size": [640, 384],
+    "image_size": [600, 600],
     "batch_size": 24,
     "train_dataset": "data/train.tfrecords",
     "val_dataset": "data/val.tfrecords",
-    "num_steps": 18000
+    "num_steps": 180000
   }
 }

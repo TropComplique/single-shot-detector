@@ -2,6 +2,12 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import tensorflow as tf
 
+"""
+It's supposed to be a tool for visualizing images
+with predicted bounding boxes while evaluating.
+But it isn't working yet.
+"""
+
 
 class ImageVisualizer:
     def __init__(self, num_images_to_show=50):
@@ -38,11 +44,10 @@ class ImageVisualizer:
 
         def get_all_images():
             return np.stack(self.images, axis=0)
-        
+
         with tf.control_dependencies([update_op]):
             all_images = tf.py_func(get_all_images, [], tf.uint8)
-            all_images = tf.Print(all_images, [tf.shape(all_images)])
-            image_summary = tf.summary.image('predictions', all_images, max_outputs=self.num_images_to_show)   
+            image_summary = tf.summary.image('predictions', all_images, max_outputs=self.num_images_to_show)
 
         return image_summary
 
