@@ -5,7 +5,6 @@ import tensorflow as tf
 from src import SSD, AnchorGenerator, FeatureExtractor
 from src.backbones import mobilenet_v1_base
 from evaluation_utils import Evaluator
-from visualization_utils import get_image_visualizer
 
 
 def model_fn(features, labels, mode, params, config):
@@ -81,19 +80,15 @@ def model_fn(features, labels, mode, params, config):
     total_loss = tf.losses.get_total_loss(add_regularization_losses=True)
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        evaluator = Evaluator(num_classes=params['num_classes'])
-        image_visualizer = ImageVisualizer(num_images_to_show=50)
 
         images = features['images']
+        filenames = features['filenames']
         batch_size = images.shape.as_list()[0]
         assert batch_size == 1
 
         with tf.name_scope('evaluator'):
-            eval_metric_ops = evaluator.get_metric_ops(features['filenames'], labels, predictions)
-
-        with tf.name_scope('image_drawer'):
-            image_visualizer_ops = image_visualizer.get_ops(images, predictions)
-            eval_metric_ops.update(image_visualizer_ops)
+            evaluator = Evaluator(num_classes=params['num_classes'])
+            eval_metric_ops = evaluator.get_metric_ops(filenames, labels, predictions)
 
         return tf.estimator.EstimatorSpec(
             mode, loss=total_loss,

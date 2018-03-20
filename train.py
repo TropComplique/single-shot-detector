@@ -60,6 +60,6 @@ train_spec = tf.estimator.TrainSpec(
 eval_spec = tf.estimator.EvalSpec(
     val_input_fn, steps=None,
     hooks=[val_iterator_initializer_hook],
-    start_delay_secs=300, throttle_secs=600
+    start_delay_secs=300, throttle_secs=300
 )
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)

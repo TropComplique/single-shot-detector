@@ -44,16 +44,16 @@ class Evaluator:
     def get_metric_ops(self, image_name, groundtruth, predictions):
         """
         Arguments:
-            image_name: a string tensor with shape [].
+            image_name: a string tensor with shape [1].
             groundtruth: a dict with the following keys
-                'boxes': a float tensor with shape [max_num_boxes, 4].
-                'labels': an int tensor with shape [max_num_boxes].
-                'num_boxes': an int tensor with shape [].
+                'boxes': a float tensor with shape [1, max_num_boxes, 4].
+                'labels': an int tensor with shape [1, max_num_boxes].
+                'num_boxes': an int tensor with shape [1].
             predictions: a dict with the following keys
-                'boxes': a float tensor with shape [max_num_boxes, 4].
-                'labels': an int tensor with shape [max_num_boxes].
-                'scores': a float tensor with shape [max_num_boxes].
-                'num_boxes': an int tensor with shape [].
+                'boxes': a float tensor with shape [1, max_num_boxes, 4].
+                'labels': an int tensor with shape [1, max_num_boxes].
+                'scores': a float tensor with shape [1, max_num_boxes].
+                'num_boxes': an int tensor with shape [1].
         """
 
         def update_op(image_name, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
@@ -61,8 +61,8 @@ class Evaluator:
             self.add_detections(image_name, boxes, labels, scores, num_boxes)
 
         tensors = [
-            images, groundtruth['boxes'], groundtruth['labels'], groundtruth['num_boxes'],
-            predictions['boxes'], predictions['labels'], predictions['scores'], predictions['num_boxes']
+            image_name[0], groundtruth['boxes'][0], groundtruth['labels'][0], groundtruth['num_boxes'][0],
+            predictions['boxes'][0], predictions['labels'][0], predictions['scores'][0], predictions['num_boxes'][0]
         ]
         update_op = tf.py_func(update_op, tensors, [], stateful=True)
 
@@ -79,7 +79,7 @@ class Evaluator:
         with tf.control_dependencies([evaluate_op]):
             metric_names = ['AP', 'precision', 'recall', 'mean_iou', 'threshold', 'FP', 'FN']
             eval_metric_ops = {
-                measure + '_' + str(label): (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
+                'metrics/' + measure + '_' + str(label): (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
                 for label in range(self.num_classes) for measure in metric_names
             }
         return eval_metric_ops

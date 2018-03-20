@@ -79,9 +79,10 @@ class AnchorGenerator:
         self.anchor_grid_list = anchor_grid_list
         self.num_anchors_per_feature_map = num_anchors_per_feature_map
 
-        anchors = tf.concat(anchor_grid_list, axis=0)
-        anchors = tf.clip_by_value(anchors, 0.0, 1.0)
-        return anchors
+        with tf.name_scope('concatenate'):
+            anchors = tf.concat(anchor_grid_list, axis=0)
+            anchors = tf.clip_by_value(anchors, 0.0, 1.0)
+            return anchors
 
     def _get_box_specs(self, scales):
         """

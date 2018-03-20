@@ -3,7 +3,7 @@
     "model_dir": "models/run00",
 
     "depth_multiplier": 0.5,
-    "num_classes": 1, "weight_decay": 1e-4,
+    "num_classes": 80, "weight_decay": 1e-4,
     "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
     "freeze": "MobilenetV1/Conv2d_[0-5][/_]",
 

@@ -84,7 +84,7 @@ class SSD:
                 num_matches = tf.reduce_sum(matches_per_image)  # shape []
                 normalizer = tf.maximum(num_matches, 1.0)
 
-            self._add_scalewise_summaries(weights, name='mean_matches_per_image')
+            self._add_scalewise_matches(weights)
             self._add_scalewise_summaries(cls_losses, name='classification_losses')
             self._add_scalewise_summaries(location_losses, name='localization_loss')
             tf.summary.scalar('total_mean_matches_per_image', tf.reduce_mean(matches_per_image))
@@ -120,6 +120,17 @@ class SSD:
             tf.summary.histogram(
                 name + '_' + str(i),
                 tf.reduce_mean(biggest_values, axis=0)
+            )
+            index += n
+    
+    def _add_scalewise_matches(self, weights):
+        """Adds summaries about number of matches for each scale."""
+        index = 0
+        for i, n in enumerate(self.num_anchors_per_feature_map):
+            matches_per_image = tf.reduce_sum(weights[:, index:(index + n)], axis=1)
+            tf.summary.scalar(
+                'mean_matches_per_image_' + str(i),
+                tf.reduce_mean(matches_per_image, axis=0)
             )
             index += n
 

@@ -8,7 +8,7 @@ class ImageVisualizer:
         self.images = []
         self.num_images_to_show = num_images_to_show
 
-    def get_ops(self, images, predictions):
+    def get_op(self, images, predictions):
         """
         Arguments:
             images: a float tensor with shape [1, 3, height, width],
@@ -30,6 +30,7 @@ class ImageVisualizer:
         # for now, labels aren't used
         def add_images(image, boxes, scores, labels):
             if len(self.images) < self.num_images_to_show:
+                print('add')
                 image = (255.0*image).astype('uint8')
                 image = draw_boxes_on_image(image, boxes, scores)
                 self.images.append(image)
@@ -37,11 +38,13 @@ class ImageVisualizer:
 
         def get_all_images():
             return np.stack(self.images, axis=0)
+        
+        with tf.control_dependencies([update_op]):
+            all_images = tf.py_func(get_all_images, [], tf.uint8)
+            all_images = tf.Print(all_images, [tf.shape(all_images)])
+            image_summary = tf.summary.image('predictions', all_images, max_outputs=self.num_images_to_show)   
 
-        all_images = tf.py_func(get_all_images, [], tf.float32)
-        evaluate_op = tf.summary.image('predictions', all_images, max_outputs=num_images_to_show)
-
-        return {'images_with_predictions': (evaluate_op, update_op)}
+        return image_summary
 
 
 def draw_boxes_on_image(image, boxes, scores):
@@ -58,15 +61,12 @@ def draw_boxes_on_image(image, boxes, scores):
     width, height = image.size
     scale = np.array([height, width, height, width], dtype='float32')
     boxes = boxes*scale
-    font = ImageFont.truetype(font=None, size=10)
 
     for box, score in zip(boxes, scores):
         ymin, xmin, ymax, xmax = box
-
         text = '{0:.3f}'.format(score)
         fill = (255, 255, 255, 45)
         outline = 'red'
-
         draw.rectangle(
             [(xmin, ymin), (xmax, ymax)],
             fill=fill, outline=outline
@@ -75,6 +75,6 @@ def draw_boxes_on_image(image, boxes, scores):
             [(xmin, ymin), (xmin + 6*len(text) + 1, ymin + 12)],
             fill='white', outline='white'
         )
-        draw.text((xmin + 1, ymin + 1), text, fill='red', font=font)
+        draw.text((xmin + 1, ymin + 1), text, fill='red')
 
     return np.array(image, dtype='uint8')
