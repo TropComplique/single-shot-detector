@@ -30,6 +30,17 @@ class SSD:
         self._add_box_predictions(feature_maps)
 
     def get_predictions(self, score_threshold=0.1, iou_threshold=0.6, max_boxes_per_class=20):
+        """Postprocess outputs of the network.
+
+        Returns:
+            boxes: a float tensor with shape [batch_size, N, 4].
+            labels: an int tensor with shape [batch_size, N].
+            scores: a float tensor with shape [batch_size, N].
+            num_boxes: an int tensor with shape [batch_size], it
+                represents the number of detections on an image.
+
+            where N = num_classes * max_boxes_per_class.
+        """
         with tf.name_scope('postprocessing'):
             boxes = batch_decode(self.box_encodings, self.anchors)
             # it has shape [batch_size, num_anchors, 4]
@@ -86,7 +97,7 @@ class SSD:
 
             self._add_scalewise_matches_summaries(weights)
             self._add_scalewise_summaries(cls_losses, name='classification_losses')
-            self._add_scalewise_summaries(location_losses, name='localization_loss')
+            self._add_scalewise_summaries(location_losses, name='localization_losses')
             tf.summary.scalar('total_mean_matches_per_image', tf.reduce_mean(matches_per_image))
 
             with tf.name_scope('ohem'):
@@ -102,7 +113,7 @@ class SSD:
                     max_negatives_per_positive=params['max_negatives_per_positive'],
                     min_negatives_per_image=params['min_negatives_per_image']
                 )
-            return {'localization_loss': location_loss/normalizer, 'classification_loss': cls_loss/normalizer}
+                return {'localization_loss': location_loss/normalizer, 'classification_loss': cls_loss/normalizer}
 
     def _add_scalewise_summaries(self, tensor, name):
         """Adds histograms of the biggest 20 percent of
@@ -118,7 +129,7 @@ class SSD:
             biggest_values, _ = tf.nn.top_k(tensor[:, index:(index + n)], k, sorted=False)
             # it has shape [batch_size, k]
             tf.summary.histogram(
-                name + '_' + str(i),
+                name + '_on_scale_' + str(i),
                 tf.reduce_mean(biggest_values, axis=0)
             )
             index += n
@@ -129,7 +140,7 @@ class SSD:
         for i, n in enumerate(self.num_anchors_per_feature_map):
             matches_per_image = tf.reduce_sum(weights[:, index:(index + n)], axis=1)
             tf.summary.scalar(
-                'mean_matches_per_image_' + str(i),
+                'mean_matches_per_image_on_scale_' + str(i),
                 tf.reduce_mean(matches_per_image, axis=0)
             )
             index += n
@@ -147,9 +158,11 @@ class SSD:
             matches: an int tensor with shape [batch_size, num_anchors].
         """
         def fn(x):
+
             boxes, labels, num_boxes = x
             boxes, labels = boxes[:num_boxes], labels[:num_boxes]
             labels = tf.one_hot(labels, self.num_classes, axis=1, dtype=tf.float32)
+
             cls_targets, reg_targets, matches = get_training_targets(
                 self.anchors, boxes, labels,
                 self.num_classes, threshold=MATCHING_THRESHOLD

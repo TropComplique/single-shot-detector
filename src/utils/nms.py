@@ -25,7 +25,7 @@ def multiclass_non_max_suppression(
         where 0 <= N' <= N.
     """
     scores_list = tf.unstack(scores, axis=1)
-    # len(scores_list) = num_classes
+    # num_classes equals to len(scores_list)
     selected_boxes, selected_scores, selected_classes = [], [], []
 
     for label, class_scores in enumerate(scores_list):

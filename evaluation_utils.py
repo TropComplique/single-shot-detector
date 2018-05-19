@@ -2,11 +2,18 @@ import numpy as np
 import tensorflow as tf
 
 
+"""
+For evaluation i use average precision @ iou=0.5
+like in PASCAL VOC Challenge (detection task):
+http://host.robots.ox.ac.uk/pascal/VOC/voc2012/devkit_doc.pdf
+"""
+
+
 class Box:
     def __init__(self, image, box, score=None):
         """
         Arguments:
-            image: a string, identifier of the image.
+            image: a string, identifier of a image.
             box: a numpy float array with shape [4].
             score: a float number or None.
         """
@@ -36,6 +43,7 @@ class Evaluator:
                 self.groundtruth_by_label_by_image[label],
                 self.detections_by_label[label], iou_threshold
             )
+        metrics['mAP'] = np.mean([metrics[label]['AP'] for label in range(self.num_classes)])
         self.metrics = metrics
 
     def clear(self):
@@ -56,7 +64,7 @@ class Evaluator:
                 'num_boxes': an int tensor with shape [1].
         """
 
-        def update_op(image_name, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
+        def update_op_func(image_name, gt_boxes, gt_labels, gt_num_boxes, boxes, labels, scores, num_boxes):
             self.add_groundtruth(image_name, gt_boxes, gt_labels, gt_num_boxes)
             self.add_detections(image_name, boxes, labels, scores, num_boxes)
 
@@ -64,7 +72,7 @@ class Evaluator:
             image_name[0], groundtruth['boxes'][0], groundtruth['labels'][0], groundtruth['num_boxes'][0],
             predictions['boxes'][0], predictions['labels'][0], predictions['scores'][0], predictions['num_boxes'][0]
         ]
-        update_op = tf.py_func(update_op, tensors, [], stateful=True)
+        update_op = tf.py_func(update_op_func, tensors, [], stateful=True)
 
         def evaluate_func():
             self.evaluate()
@@ -77,26 +85,23 @@ class Evaluator:
             return value_func
 
         with tf.control_dependencies([evaluate_op]):
+
             metric_names = ['AP', 'precision', 'recall', 'mean_iou', 'threshold', 'FP', 'FN']
             eval_metric_ops = {
-                'metrics/' + measure + '_' + str(label):
+                'metrics/' + measure + '_for_label_' + str(label):
                 (tf.py_func(get_value_func(label, measure), [], tf.float32), update_op)
                 for label in range(self.num_classes) for measure in metric_names
             }
+
+            def get_map_func():
+                return np.float32(self.metrics['mAP'])
+            eval_metric_ops['metrics/mAP'] = (tf.py_func(get_map_func, [], tf.float32), update_op)
+
         return eval_metric_ops
 
     def _initialize(self):
         self.detections_by_label = {label: [] for label in range(self.num_classes)}
         self.groundtruth_by_label_by_image = {label: {} for label in range(self.num_classes)}
-
-    def add_groundtruth(self, image_name, boxes, labels, num_boxes):
-        boxes, labels = boxes[:num_boxes], labels[:num_boxes]
-        for box, label in zip(boxes, labels):
-            groundtruth_by_image = self.groundtruth_by_label_by_image[label]
-            if image_name in groundtruth_by_image:
-                groundtruth_by_image[image_name] += [Box(image_name, box)]
-            else:
-                groundtruth_by_image[image_name] = [Box(image_name, box)]
 
     def add_detections(self, image_name, boxes, labels, scores, num_boxes):
         """
@@ -110,6 +115,15 @@ class Evaluator:
         boxes, labels, scores = boxes[:num_boxes], labels[:num_boxes], scores[:num_boxes]
         for box, label, score in zip(boxes, labels, scores):
             self.detections_by_label[label] += [Box(image_name, box, score)]
+
+    def add_groundtruth(self, image_name, boxes, labels, num_boxes):
+        boxes, labels = boxes[:num_boxes], labels[:num_boxes]
+        for box, label in zip(boxes, labels):
+            groundtruth_by_image = self.groundtruth_by_label_by_image[label]
+            if image_name in groundtruth_by_image:
+                groundtruth_by_image[image_name] += [Box(image_name, box)]
+            else:
+                groundtruth_by_image[image_name] = [Box(image_name, box)]
 
 
 def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):

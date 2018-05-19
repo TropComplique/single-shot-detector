@@ -6,6 +6,8 @@ import tensorflow as tf
 It's supposed to be a tool for visualizing images
 with predicted bounding boxes while evaluating.
 But it isn't working yet.
+Apparently, it is very hard to implement it
+with tf.estimator framework.
 """
 
 
@@ -36,7 +38,6 @@ class ImageVisualizer:
         # for now, labels aren't used
         def add_images(image, boxes, scores, labels):
             if len(self.images) < self.num_images_to_show:
-                print('add')
                 image = (255.0*image).astype('uint8')
                 image = draw_boxes_on_image(image, boxes, scores)
                 self.images.append(image)

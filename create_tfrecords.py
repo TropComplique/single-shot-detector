@@ -3,14 +3,18 @@ import os
 import PIL.Image
 import tensorflow as tf
 import json
+import random
+import math
 import argparse
 from tqdm import tqdm
 import sys
 
 
 """
-The purpose of this script is to create a .tfrecords file from a folder of images and
-a folder of annotations. Annotations are in the json format.
+The purpose of this script is to create a set of .tfrecords files
+from a folder of images and a folder of annotations.
+Annotations are in the json format.
+Images must have .jpg or .jpeg filename extension.
 
 Example of a json annotation (with filename "132416.json"):
 {
@@ -26,8 +30,9 @@ Example of use:
 python create_tfrecords.py \
     --image_dir=/home/dan/datasets/BBA/images_val/ \
     --annotations_dir=/home/dan/datasets/BBA/annotations_val/ \
-    --output=data/val.tfrecords \
-    --labels=data/labels.txt
+    --output=data/train_shards/ \
+    --labels=data/labels.txt \
+    --num_shards=100
 
 labels is a .txt file where each line is a class name.
 """
@@ -35,18 +40,11 @@ labels is a .txt file where each line is a class name.
 
 def make_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-i', '--image_dir', type=str, default='data/images'
-    )
-    parser.add_argument(
-        '-a', '--annotations_dir', type=str, default='data/annotations'
-    )
-    parser.add_argument(
-        '-o', '--output', type=str, default='data/data.tfrecords'
-    )
-    parser.add_argument(
-        '-l', '--labels', type=str, default='data/labels.txt'
-    )
+    parser.add_argument('-i', '--image_dir', type=str)
+    parser.add_argument('-a', '--annotations_dir', type=str)
+    parser.add_argument('-o', '--output', type=str)
+    parser.add_argument('-l', '--labels', type=str)
+    parser.add_argument('-s', '--num_shards', type=int, default=1)
     return parser.parse_args()
 
 
@@ -141,17 +139,40 @@ def main():
     print('Reading images from:', image_dir)
     print('Reading annotations from:', annotations_dir, '\n')
 
-    writer = tf.python_io.TFRecordWriter(ARGS.output)
     examples_list = os.listdir(annotations_dir)
-    num_examples = 0
+    num_examples = len(examples_list)
+    print('Number of images:', num_examples)
+
+    num_shards = ARGS.num_shards
+    shard_size = math.ceil(num_examples/num_shards)
+    print('Number of images per shard:', shard_size)
+
+    output_dir = ARGS.output
+    shutil.rmtree(output_dir, ignore_errors=True)
+    os.mkdir(output_dir)
+
+    shard_id = 0
+    num_examples_written = 0
     for example in tqdm(examples_list):
+
+        if num_examples_written == 0:
+            shard_path = os.path.join(output_dir, 'shard-%04d.tfrecords' % shard_id)
+            writer = tf.python_io.TFRecordWriter(shard_path)
+
         path = os.path.join(annotations_dir, example)
         annotation = json.load(open(path))
         tf_example = dict_to_tf_example(annotation, image_dir, labels)
         writer.write(tf_example.SerializeToString())
-        num_examples += 1
+        num_examples_written += 1
 
-    writer.close()
+        if num_examples_written == shard_size:
+            shard_id += 1
+            num_examples_written = 0
+            writer.close()
+
+    if num_examples_written != shard_size:
+        writer.close()
+
     print('Result is here:', ARGS.output)
 
 

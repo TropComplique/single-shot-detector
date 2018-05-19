@@ -20,7 +20,7 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
 
     def depth(x):
         """Reduce the number of filters in a layer."""
-        return max(int(x * depth_multiplier), min_depth)
+        return make_divisible(x * depth_multiplier, divisor=8, min_value=min_depth)
 
     def preprocess(images):
         """Transform images before feeding them to the network."""
@@ -31,14 +31,14 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
             x, axis=1, center=True, scale=True,
             momentum=BATCH_NORM_MOMENTUM, epsilon=0.001,
             training=is_training, fused=True,
-            name='batch_norm'
+            name='BatchNorm'
         )
         return x
 
     with tf.name_scope('standardize_input'):
         x = preprocess(images)
 
-    with tf.variable_scope('mobilenet_v2'):
+    with tf.variable_scope('MobilenetV2'):
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
@@ -48,14 +48,20 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
         with slim.arg_scope([slim.conv2d, depthwise_conv], **params):
             features = {}
 
-            layer_name = 'conv_0'
+            layer_name = 'Conv'
             x = slim.conv2d(x, depth(32), (3, 3), stride=2, scope=layer_name)
             features[layer_name] = x
 
+            block_name = 'expanded_conv'
+            x = inverted_residual_block(
+                x, stride=1, expansion_factor=1,
+                output_channels=depth(16), scope=block_name
+            )
+            features[block_name] = x
+
             # (t, c, n, s) - like in the original paper
             block_configs = [
-                (1, 16, 1, 1),
-                (6, 24, 2, 2),
+                (6, 32, 2, 2),
                 (6, 32, 3, 2),
                 (6, 64, 4, 2),
                 (6, 96, 3, 1),
@@ -66,7 +72,7 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
             i = 1
             for t, c, n, s in block_configs:
 
-                block_name = 'inverted_residual_block_s%d_%d' % (s, i)
+                block_name = 'expanded_conv_%d' % i
                 x = inverted_residual_block(
                     x, stride=s, expansion_factor=t,
                     output_channels=depth(c), scope=block_name
@@ -75,7 +81,7 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
                 i += 1
 
                 for _ in range(1, n):
-                    block_name = 'inverted_residual_block_s%d_%d' % (1, i)
+                    block_name = 'expanded_conv_%d' % i
                     x = inverted_residual_block(
                         x, stride=1, expansion_factor=t,
                         scope=block_name
@@ -83,9 +89,9 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
                     features[block_name] = x
                     i += 1
 
-            layer_name = 'conv_%d' % i
+            layer_name = 'Conv_1'
             final_channels = int(1280 * depth_multiplier) if depth_multiplier > 1.0 else 1280
-            x = slim.conv2d(x, final_channels, (1, 1), stride=2, scope=layer_name)
+            x = slim.conv2d(x, final_channels, (1, 1), stride=1, scope=layer_name)
             features[layer_name] = x
 
     return x, features
@@ -99,20 +105,39 @@ def inverted_residual_block(x, stride=1, expansion_factor=6, output_channels=Non
     residual = x
 
     with tf.variable_scope(scope):
-        x = slim.conv2d(
-            x, expansion_factor * in_channels, (1, 1),
-            stride=1, scope='conv_1x1'
-        )
+        if expansion_factor != 1:
+            x = slim.conv2d(
+                x, expansion_factor * in_channels, (1, 1),
+                stride=1, scope='expand'
+            )
         x = depthwise_conv(
             x, kernel=3, stride=stride,
-            scope='conv_3x3_depthwise'
+            scope='depthwise'
         )
         x = slim.conv2d(
             x, output_channels, (1, 1),
             stride=1, activation_fn=lambda x: x,
-            scope='conv_1x1_linear'
+            scope='project'
         )
-        if in_channels == output_channels:
-            return x + residual
-        else:
-            return x
+        return x + residual if in_channels == output_channels and stride == 1 else x
+
+
+def make_divisible(v, divisor, min_value=None):
+    """
+    Arguments:
+        v: a float.
+        divisor, min_value: integers.
+    Returns:
+        an integer.
+    """
+    if min_value is None:
+        min_value = divisor
+    new_v = max(min_value, (int(v + divisor / 2) // divisor) * divisor)
+
+    # make sure that round down does not go down by more than 10%
+    if new_v < 0.9 * v:
+        new_v += divisor
+
+    # now value is divisible by divisor
+    # (but not necessarily if min_value is not None)
+    return new_v

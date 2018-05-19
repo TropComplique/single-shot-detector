@@ -13,9 +13,12 @@ Average precision on the validation set will be shown there.
 * Run `save.py` to export the trained model for inference.
 
 ## Requirements
-* Python 3.6
-* tensorflow 1.4
+* Python 3
+* tensorflow 1.8
 * tqdm, Pillow, numpy, matplotlib
 
 ## Credit
 This implementation is based on [Tensorflow Object Detection API](https://github.com/tensorflow/models/tree/master/research/object_detection).
+
+## Notes
+1. The function that computes AP is slightly different from the standard one.

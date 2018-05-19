@@ -3,7 +3,7 @@ import re
 import tensorflow as tf
 
 from src import SSD, AnchorGenerator, FeatureExtractor
-from src.backbones import mobilenet_v1_base
+from src.backbones import mobilenet_v2_base
 from evaluation_utils import Evaluator
 
 
@@ -14,7 +14,7 @@ def model_fn(features, labels, mode, params, config):
 
     # the base network
     def backbone(images, is_training):
-        return mobilenet_v1_base(
+        return mobilenet_v2_base(
             images, is_training,
             depth_multiplier=params['depth_multiplier']
         )
@@ -37,9 +37,9 @@ def model_fn(features, labels, mode, params, config):
     ssd = SSD(features['images'], feature_extractor, anchor_generator, params['num_classes'])
 
     # use a pretrained backbone network
-    if params['pretrained_checkpoint'] is not None:
+    if is_training and params['pretrained_checkpoint'] is not None:
         with tf.name_scope('init_from_checkpoint'):
-            tf.train.init_from_checkpoint(params['pretrained_checkpoint'], {'MobilenetV1/': 'MobilenetV1/'})
+            tf.train.init_from_checkpoint(params['pretrained_checkpoint'], {'MobilenetV2/': 'MobilenetV2/'})
 
     # add NMS to the graph
     if not is_training:
@@ -50,14 +50,9 @@ def model_fn(features, labels, mode, params, config):
         )
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        # rename prediction keys
-        name_map = {
-            'boxes': 'detection_boxes', 'scores': 'detection_scores',
-            'labels': 'detection_classes', 'num_boxes': 'num_detections'
-        }
         # this is required for exporting a savedmodel
         export_outputs = tf.estimator.export.PredictOutput({
-            name: tf.identity(tensor, name_map[name])
+            name: tf.identity(tensor, name)
             for name, tensor in predictions.items()
         })
         return tf.estimator.EstimatorSpec(
@@ -102,12 +97,14 @@ def model_fn(features, labels, mode, params, config):
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops), tf.variable_scope('optimizer'):
-        optimizer = tf.train.AdamOptimizer(learning_rate)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=0.9, momentum=0.9, epsilon=1.0)
 
         # you can freeze some variables
-        trainable_var = tf.trainable_variables()
-        regexp = re.compile(params['freeze'])
-        var_list = [v for v in trainable_var if not bool(regexp.search(v.name))]
+        var_list = None
+        if params['freeze']:
+            trainable_var = tf.trainable_variables()
+            regexp = re.compile(params['freeze'])
+            var_list = [v for v in trainable_var if not bool(regexp.search(v.name))]
 
         grads_and_vars = optimizer.compute_gradients(total_loss, var_list=var_list)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)

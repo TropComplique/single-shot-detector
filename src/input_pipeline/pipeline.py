@@ -1,7 +1,6 @@
 import tensorflow as tf
 
-from src.constants import SHUFFLE_BUFFER_SIZE, PREFETCH_BUFFER_SIZE,\
-    NUM_THREADS, RESIZE_METHOD
+from src.constants import SHUFFLE_BUFFER_SIZE, NUM_THREADS, RESIZE_METHOD
 from src.input_pipeline.random_image_crop import random_image_crop
 from src.input_pipeline.other_augmentations import random_color_manipulations,\
     random_flip_left_right, random_pixel_value_scale, random_jitter_boxes,\
@@ -17,7 +16,7 @@ class Pipeline:
         Note: when evaluating set batch_size to 1.
 
         Arguments:
-            filename: a string, a path to a tfrecords file.
+            filenames: a list of strings, paths to tfrecords files.
             batch_size: an integer.
             image_size: a list with two integers [width, height],
                 images of this size will be in a batch.
@@ -27,22 +26,40 @@ class Pipeline:
         self.image_width, self.image_height = image_size
         self.augmentation = augmentation
         self.batch_size = batch_size
-        self.num_examples = sum(1 for _ in tf.python_io.tf_record_iterator(filename))
+
+        def get_num_samples(filename):
+            return sum(1 for _ in tf.python_io.tf_record_iterator(filename))
+
+        num_examples = 0
+        for filename in filenames:
+            num_examples_in_file = get_num_samples(filename)
+            assert num_examples_in_file > 0
+            num_examples += num_examples_in_file
+        self.num_examples = num_examples
         assert self.num_examples > 0
 
-        dataset = tf.data.TFRecordDataset(filename)
-        dataset = dataset.repeat(1 if not repeat else None)
-        dataset = dataset.map(self._parse_and_preprocess, num_parallel_calls=NUM_THREADS)
+        dataset = tf.data.Dataset.from_tensor_slices(filenames)
+        num_shards = len(filenames)
+
+        if shuffle:
+            dataset = dataset.shuffle(buffer_size=num_shards)
+        dataset = dataset.interleave(
+            lambda filename: tf.data.TFRecordDataset(filename),
+            cycle_length=num_shards, block_length=4
+        )
+        dataset = dataset.prefetch(buffer_size=batch_size)
 
         if shuffle:
             dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
+        dataset = dataset.repeat(None if repeat else 1)
+        dataset = dataset.map(self._parse_and_preprocess, num_parallel_calls=NUM_THREADS)
 
         # we need batches of fixed size
         padded_shapes = ([3, self.image_height, self.image_width], [None, 4], [None], [], [])
         dataset = dataset.apply(
            tf.contrib.data.padded_batch_and_drop_remainder(batch_size, padded_shapes)
         )
-        dataset = dataset.prefetch(PREFETCH_BUFFER_SIZE)
+        dataset = dataset.prefetch(1)
 
         self.iterator = tf.data.Iterator.from_structure(
             dataset.output_types,
@@ -122,7 +139,7 @@ class Pipeline:
 
     def _augmentation_fn(self, image, boxes, labels):
         # there are a lot of hyperparameters here,
-        # you will need to tune them all, haha.
+        # you will need to tune them all, haha
 
         image, boxes, labels = random_image_crop(
             image, boxes, labels, probability=0.8,
@@ -137,9 +154,9 @@ class Pipeline:
         )
         # if you do color augmentations before resizing, it will be very slow!
 
-        image = random_color_manipulations(image, probability=0.7, grayscale_probability=0.07)
-        image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.7)
+        image = random_color_manipulations(image, probability=0.25, grayscale_probability=0.05)
+        image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.25)
         boxes = random_jitter_boxes(boxes, ratio=0.05)
-        image = random_colored_patches(image, max_patches=20, probability=0.5, size_to_image_ratio=0.1)
+        image = random_colored_patches(image, max_patches=10, probability=0.5, size_to_image_ratio=0.1)
         image, boxes = random_flip_left_right(image, boxes)
         return image, boxes, labels

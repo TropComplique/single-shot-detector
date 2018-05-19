@@ -20,9 +20,8 @@ class FeatureExtractor:
 
         x, feature_maps = self.backbone(images, self.is_training)
         image_features = [
-            feature_maps['Conv2d_9_pointwise'],
-            feature_maps['Conv2d_11_pointwise'],
-            feature_maps['Conv2d_13_pointwise']
+            feature_maps['expanded_conv_12'],  # scale 0
+            feature_maps['Conv_1']  # scale 1
         ]
 
         def batch_norm(x):
@@ -34,7 +33,8 @@ class FeatureExtractor:
             )
             return x
 
-        filters = [64, 64]
+        # scales 2, 3, 4, 5:
+        filters = [512, 256, 256, 128]
         params = {
             'padding': 'SAME',
             'activation_fn': tf.nn.relu6,
@@ -42,9 +42,9 @@ class FeatureExtractor:
             'data_format': 'NCHW'
         }
         with slim.arg_scope([slim.conv2d], **params):
-            for i, num_filters in enumerate(filters, 14):
-                x = slim.conv2d(x, num_filters, (1, 1), stride=1, scope='Conv2d_%d_1x1' % i)
-                x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_%d' % i)
+            for i, num_filters in enumerate(filters, 2):
+                x = slim.conv2d(x, num_filters // 2, (1, 1), stride=1, scope='Conv2d_scale_%d_1x1' % i)
+                x = slim.conv2d(x, num_filters, (3, 3), stride=2, scope='Conv2d_scale_%d' % i)
                 image_features.append(x)
 
         return image_features

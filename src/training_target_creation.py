@@ -38,13 +38,13 @@ def get_training_targets(anchors, groundtruth_boxes, groundtruth_labels, num_cla
 def _match(anchors, groundtruth_boxes, threshold=0.5):
     """Matching algorithm:
     1) for each groundtruth box choose the anchor with largest iou,
-    2) remove this set of anchors from all anchors,
+    2) remove this set of anchors from the set of all anchors,
     3) for each remaining anchor choose the groundtruth box with largest iou,
        but only if this iou is larger than `threshold`.
 
     Note: after step 1, it could happen that for some two groundtruth boxes
     chosen anchors are the same. Let's hope this never happens.
-    See comments below.
+    Also see the comments below.
 
     Arguments:
         anchors: a float tensor with shape [num_anchors, 4].

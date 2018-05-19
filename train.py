@@ -6,7 +6,11 @@ from src.input_pipeline import Pipeline
 tf.logging.set_verbosity('INFO')
 
 
-params = json.load(open('config.json'))
+CONFIG = 'config.json'
+GPU_TO_USE = '0'
+
+
+params = json.load(open(CONFIG))
 model_params = params['model_params']
 input_params = params['input_pipeline_params']
 
@@ -15,14 +19,22 @@ def get_input_fn(is_training=True):
 
     image_size = input_params['image_size']
     iterator_initializer_hook = IteratorInitializerHook()
-    filename = input_params['train_dataset'] if is_training else input_params['val_dataset']
+    dataset_path = input_params['train_dataset'] if is_training else input_params['val_dataset']
     batch_size = input_params['batch_size'] if is_training else 1
     # for evaluation it's important to set batch_size to 1
+
+    filenames = os.listdir(dataset_path)
+    filenames = [n for n in filenames if n.endswith('.tfrecords')]
+    filenames = [os.path.join(dataset_path, n) for n in sorted(filenames)]
+
+    # for evaluation i use only one shard
+    if not is_training:
+        assert len(filenames) == 1
 
     def input_fn():
         with tf.device('/cpu:0'), tf.name_scope('input_pipeline'):
             pipeline = Pipeline(
-                filename,
+                filenames,
                 batch_size=batch_size, image_size=image_size,
                 repeat=is_training, shuffle=is_training,
                 augmentation=is_training
@@ -35,15 +47,15 @@ def get_input_fn(is_training=True):
 
 
 config = tf.ConfigProto()
-config.gpu_options.visible_device_list = '0'
+config.gpu_options.visible_device_list = GPU_TO_USE
 
 run_config = tf.estimator.RunConfig()
 run_config = run_config.replace(
     model_dir=model_params['model_dir'],
     session_config=config,
-    save_summary_steps=100,
+    save_summary_steps=120,
     save_checkpoints_secs=300,
-    log_step_count_steps=25
+    log_step_count_steps=60
 )
 
 train_input_fn, train_iterator_initializer_hook = get_input_fn(is_training=True)

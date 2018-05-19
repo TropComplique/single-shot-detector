@@ -57,6 +57,7 @@ class AnchorGenerator:
         assert len(scales) == num_layers
         scales = scales + [1.0]
         box_specs_list = self._get_box_specs(scales)
+
         # number of anchors per cell in a grid
         self.num_anchors_per_location = [len(layer_box_specs) for layer_box_specs in box_specs_list]
 

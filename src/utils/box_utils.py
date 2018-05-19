@@ -24,7 +24,7 @@ def iou(boxes1, boxes2):
         areas1 = area(boxes1)
         areas2 = area(boxes2)
         unions = tf.expand_dims(areas1, 1) + tf.expand_dims(areas2, 0) - intersections
-        return tf.maximum(tf.divide(intersections, unions), 0.0)
+        return tf.clip_by_value(tf.divide(intersections, unions), 0.0, 1.0)
 
 
 def intersection(boxes1, boxes2):
