@@ -3,6 +3,7 @@ import os
 import PIL.Image
 import tensorflow as tf
 import json
+import shutil
 import random
 import math
 import argparse
@@ -170,7 +171,7 @@ def main():
             num_examples_written = 0
             writer.close()
 
-    if num_examples_written != shard_size:
+    if num_examples_written != shard_size and num_examples % num_shards != 0:
         writer.close()
 
     print('Result is here:', ARGS.output)

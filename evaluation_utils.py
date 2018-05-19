@@ -142,6 +142,7 @@ def evaluate_detector(groundtruth_by_img, all_detections, iou_threshold=0.5):
 
     for boxes in groundtruth_by_img.values():
         n_groundtruth_boxes += len(boxes)
+    n_groundtruth_boxes = max(n_groundtruth_boxes, 1)
 
     # sort by confidence in decreasing order
     all_detections.sort(key=lambda box: box.confidence, reverse=True)
@@ -198,6 +199,9 @@ def compute_best_threshold(precision, recall, confidences):
         2. a float number, precision at the threshold.
         3. a float number, recall at the threshold.
     """
+    if len(confidences) == 0:
+        return 0.0, 0.0, 0.0
+
     precision = np.asarray(precision)
     recall = np.asarray(recall)
     confidences = np.asarray(confidences)

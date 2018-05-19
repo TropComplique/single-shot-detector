@@ -3,8 +3,8 @@
     "model_dir": "models/run00",
 
     "depth_multiplier": 1.4,
-    "num_classes": 90, "weight_decay": 1e-5,
-    "pretrained_checkpoint": "pretrained/mobilenet_v1_0.50_224.ckpt",
+    "num_classes": 80, "weight_decay": 1e-5,
+    "pretrained_checkpoint": "pretrained/mobilenet_v2_1.4_224.ckpt",
     "freeze": "",
 
     "scales": null,
@@ -28,9 +28,9 @@
 
   "input_pipeline_params": {
     "image_size": [512, 512],
-    "batch_size": 32,
-    "train_dataset": "train_shards/",
-    "val_dataset": "val_shards/",
+    "batch_size": 16,
+    "train_dataset": "data/train_shards/",
+    "val_dataset": "data/val_shards/",
     "num_steps": 180000
   }
 }

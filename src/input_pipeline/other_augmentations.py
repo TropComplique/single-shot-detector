@@ -120,14 +120,10 @@ def random_jitter_boxes(boxes, ratio=0.05):
         return distorted_boxes
 
 
-def random_colored_patches(
+def random_black_patches(
         image, max_patches=10,
-        probability=0.5, size_to_image_ratio=0.1,
-        only_black=False):
-    """Randomly adds some colored (or only black) patches to the image.
-
-    Note: colored patches are not 'true' colored patches,
-    try this function and see for yourself.
+        probability=0.5, size_to_image_ratio=0.1):
+    """Randomly adds black patches to the image.
 
     Arguments:
         image: a float tensor with shape [height, width, 3].
@@ -136,7 +132,6 @@ def random_colored_patches(
         probability: at each try, what is the chance of adding a box.
         size_to_image_ratio: determines the ratio of the size of the patches
             to the size of the image. box_size = size_to_image_ratio * min(width, height).
-        only_black: a boolean.
     Returns:
         a float tensor with shape [height, width, 3].
     """
@@ -150,21 +145,9 @@ def random_colored_patches(
         normalized_x_min = tf.random_uniform([], minval=0.0, maxval=(1.0 - size_to_image_ratio))
         y_min = tf.to_int32(normalized_y_min * tf.to_float(image_height))
         x_min = tf.to_int32(normalized_x_min * tf.to_float(image_width))
-
-        if only_black:
-            black_box = tf.ones([box_size, box_size, 3], dtype=tf.float32)
-        else:
-            # values -2.0 and 0.5 are kinda meaningless (or not)
-            random_color = tf.random_uniform([1, 1, 3], minval=-2.0, maxval=0.5, dtype=tf.float32)
-            black_box = tf.tile(random_color, [box_size, box_size, 1])
-
+        black_box = tf.ones([box_size, box_size, 3], dtype=tf.float32)
         black_box_padded = tf.image.pad_to_bounding_box(black_box, y_min, x_min, image_height, image_width)
         mask = 1.0 - black_box_padded
-
-        # well, you could try something like
-        # image = tf.multiply(image, tf.to_float(tf.equal(mask, 1.0))) + black_box_padded
-        # but it is too slow!
-
         image = tf.multiply(image, mask)
         return image
 

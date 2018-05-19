@@ -1,5 +1,6 @@
 import tensorflow as tf
 import json
+import os
 
 from model import model_fn, IteratorInitializerHook
 from src.input_pipeline import Pipeline
@@ -26,10 +27,6 @@ def get_input_fn(is_training=True):
     filenames = os.listdir(dataset_path)
     filenames = [n for n in filenames if n.endswith('.tfrecords')]
     filenames = [os.path.join(dataset_path, n) for n in sorted(filenames)]
-
-    # for evaluation i use only one shard
-    if not is_training:
-        assert len(filenames) == 1
 
     def input_fn():
         with tf.device('/cpu:0'), tf.name_scope('input_pipeline'):

@@ -1,16 +1,17 @@
 import tensorflow as tf
 
-from src.constants import SHUFFLE_BUFFER_SIZE, NUM_THREADS, RESIZE_METHOD
+from src.constants import SHUFFLE_BUFFER_SIZE, NUM_THREADS, RESIZE_METHOD,\
+    CYCLE_LENGTH, BLOCK_LENGTH
 from src.input_pipeline.random_image_crop import random_image_crop
 from src.input_pipeline.other_augmentations import random_color_manipulations,\
     random_flip_left_right, random_pixel_value_scale, random_jitter_boxes,\
-    random_colored_patches
+    random_black_patches
 
 
 class Pipeline:
     """Input pipeline for training or evaluating object detectors."""
 
-    def __init__(self, filename, batch_size, image_size,
+    def __init__(self, filenames, batch_size, image_size,
                  repeat=False, shuffle=False, augmentation=False):
         """
         Note: when evaluating set batch_size to 1.
@@ -20,6 +21,7 @@ class Pipeline:
             batch_size: an integer.
             image_size: a list with two integers [width, height],
                 images of this size will be in a batch.
+            repeat: a boolean, whether repeat indefinitely.
             shuffle: whether to shuffle the dataset.
             augmentation: whether to do data augmentation.
         """
@@ -43,9 +45,13 @@ class Pipeline:
 
         if shuffle:
             dataset = dataset.shuffle(buffer_size=num_shards)
+
+        # you cannot set cycle_length too hight
+        cycle_length = min(CYCLE_LENGTH, num_shards)
+
         dataset = dataset.interleave(
             lambda filename: tf.data.TFRecordDataset(filename),
-            cycle_length=num_shards, block_length=4
+            cycle_length=cycle_length, block_length=BLOCK_LENGTH
         )
         dataset = dataset.prefetch(buffer_size=batch_size)
 
@@ -59,7 +65,7 @@ class Pipeline:
         dataset = dataset.apply(
            tf.contrib.data.padded_batch_and_drop_remainder(batch_size, padded_shapes)
         )
-        dataset = dataset.prefetch(1)
+        dataset = dataset.prefetch(buffer_size=1)
 
         self.iterator = tf.data.Iterator.from_structure(
             dataset.output_types,
@@ -142,10 +148,10 @@ class Pipeline:
         # you will need to tune them all, haha
 
         image, boxes, labels = random_image_crop(
-            image, boxes, labels, probability=0.8,
+            image, boxes, labels, probability=0.5,
             min_object_covered=0.0,
             aspect_ratio_range=(0.85, 1.15),
-            area_range=(0.333, 0.8),
+            area_range=(0.333, 0.9),
             overlap_thresh=0.3
         )
         image = tf.image.resize_images(
@@ -156,7 +162,7 @@ class Pipeline:
 
         image = random_color_manipulations(image, probability=0.25, grayscale_probability=0.05)
         image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.25)
-        boxes = random_jitter_boxes(boxes, ratio=0.05)
-        image = random_colored_patches(image, max_patches=10, probability=0.5, size_to_image_ratio=0.1)
+        boxes = random_jitter_boxes(boxes, ratio=0.01)
+        image = random_black_patches(image, max_patches=10, probability=0.5, size_to_image_ratio=0.1)
         image, boxes = random_flip_left_right(image, boxes)
         return image, boxes, labels

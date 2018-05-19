@@ -12,10 +12,12 @@ SCALE_FACTORS = [10.0, 10.0, 5.0, 5.0]
 # here are input pipeline settings.
 # you need to tweak these numbers for your system,
 # it can accelerate training
-SHUFFLE_BUFFER_SIZE = 2000
+SHUFFLE_BUFFER_SIZE = 4000
 NUM_THREADS = 8
 # read here about the buffer sizes:
 # stackoverflow.com/questions/46444018/meaning-of-buffer-size-in-dataset-map-dataset-prefetch-and-dataset-shuffle
+CYCLE_LENGTH = 512
+BLOCK_LENGTH = 4
 
 # images are resized before feeding them to the network
 RESIZE_METHOD = tf.image.ResizeMethod.NEAREST_NEIGHBOR

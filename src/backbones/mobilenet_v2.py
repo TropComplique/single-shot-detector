@@ -61,7 +61,7 @@ def mobilenet_v2_base(images, is_training, depth_multiplier=1.0, min_depth=8):
 
             # (t, c, n, s) - like in the original paper
             block_configs = [
-                (6, 32, 2, 2),
+                (6, 24, 2, 2),
                 (6, 32, 3, 2),
                 (6, 64, 4, 2),
                 (6, 96, 3, 1),
