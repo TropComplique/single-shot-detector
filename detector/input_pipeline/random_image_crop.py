@@ -1,21 +1,23 @@
 import tensorflow as tf
-from src.utils import area, intersection
+from detector.utils import area, intersection
+from detector.constants import EPSILON
+
+
+"""Here it is assumed that box coordinates are normalized."""
 
 
 def random_image_crop(
-        image, boxes, labels, probability=0.5,
-        min_object_covered=0.9,
-        aspect_ratio_range=(0.75, 1.33),
-        area_range=(0.5, 1.0),
-        overlap_thresh=0.3):
+        image, boxes, labels, probability=0.1,
+        min_object_covered=0.9, aspect_ratio_range=(0.75, 1.33),
+        area_range=(0.5, 1.0), overlap_thresh=0.3):
 
     def crop(image, boxes, labels):
-        image, boxes, keep_ids = _random_crop_image(
+        image, boxes, keep_indices = randomly_crop_image(
             image, boxes, min_object_covered,
             aspect_ratio_range,
             area_range, overlap_thresh
         )
-        labels = tf.gather(labels, keep_ids)
+        labels = tf.gather(labels, keep_indices)
         return image, boxes, labels
 
     do_it = tf.less(tf.random_uniform([]), probability)
@@ -27,7 +29,7 @@ def random_image_crop(
     return image, boxes, labels
 
 
-def _random_crop_image(
+def randomly_crop_image(
         image, boxes, min_object_covered=0.9,
         aspect_ratio_range=(0.75, 1.33), area_range=(0.5, 1.0),
         overlap_thresh=0.3):
@@ -55,9 +57,9 @@ def _random_crop_image(
     Returns:
         image: cropped image.
         boxes: remaining boxes.
-        keep_ids: indices of remaining boxes in input boxes tensor.
+        keep_indices: indices of remaining boxes in input boxes tensor.
             They are used to get a slice from the 'labels' tensor.
-            len(keep_ids) = len(boxes).
+            len(keep_indices) = len(boxes).
     """
     with tf.name_scope('random_crop_image'):
 
@@ -72,29 +74,28 @@ def _random_crop_image(
         )
         begin, size, window = sample_distorted_bounding_box
         image = tf.slice(image, begin, size)
+        image.set_shape([None, None, 3])
         window = tf.squeeze(window, axis=[0, 1])
 
-        # remove boxes that are completely outside cropped image
-        boxes, inside_window_ids = _prune_completely_outside_window(
-            boxes, window
-        )
+        # remove boxes that are completely outside the cropped image
+        boxes, inside_window_ids = prune_completely_outside_window(boxes, window)
 
-        # remove boxes that are two much outside image
-        boxes, keep_ids = _prune_non_overlapping_boxes(
-            boxes, tf.expand_dims(window, 0), overlap_thresh
+        # remove boxes that are too much outside the cropped image
+        boxes, keep_indices = prune_non_overlapping_boxes(
+            boxes, tf.expand_dims(window, 0),
+            min_overlap=overlap_thresh
         )
 
         # change coordinates of the remaining boxes
-        boxes = _change_coordinate_frame(boxes, window)
+        boxes = change_coordinate_frame(boxes, window)
 
-        keep_ids = tf.gather(inside_window_ids, keep_ids)
-        return image, boxes, keep_ids
+        keep_indices = tf.gather(inside_window_ids, keep_indices)
+        return image, boxes, keep_indices
 
 
-def _prune_completely_outside_window(boxes, window):
+def prune_completely_outside_window(boxes, window):
     """Prunes bounding boxes that fall completely outside of the given window.
     This function does not clip partially overflowing boxes.
-
     Arguments:
         boxes: a float tensor with shape [M_in, 4].
         window: a float tensor with shape [4] representing [ymin, xmin, ymax, xmax]
@@ -123,7 +124,7 @@ def _prune_completely_outside_window(boxes, window):
         return boxes, valid_indices
 
 
-def _prune_non_overlapping_boxes(boxes1, boxes2, min_overlap=0.0):
+def prune_non_overlapping_boxes(boxes1, boxes2, min_overlap):
     """Prunes the boxes in boxes1 that overlap less than thresh with boxes2.
     For each box in boxes1, we want its IOA to be more than min_overlap with
     at least one of the boxes in boxes2. If it does not, we remove it.
@@ -135,19 +136,22 @@ def _prune_non_overlapping_boxes(boxes1, boxes2, min_overlap=0.0):
             to count them as overlapping.
     Returns:
         boxes: a float tensor with shape [N', 4].
-        keep_inds: a long tensor with shape [N'] indexing kept bounding boxes in the
+        keep_indices: a long tensor with shape [N'] indexing kept bounding boxes in the
             first input tensor ('boxes1').
     """
     with tf.name_scope('prune_non_overlapping_boxes'):
-        ioa = _ioa(boxes2, boxes1)  # [M, N] tensor
-        ioa = tf.reduce_max(ioa, axis=0)  # [N] tensor
-        keep_bool = tf.greater_equal(ioa, tf.constant(min_overlap))
-        keep_inds = tf.squeeze(tf.where(keep_bool), axis=1)
-        boxes = tf.gather(boxes1, keep_inds)
-        return boxes, keep_inds
+
+        overlap = ioa(boxes2, boxes1)  # shape [M, N]
+        overlap = tf.reduce_max(overlap, axis=0)  # shape [N]
+
+        keep_bool = tf.greater_equal(overlap, min_overlap)
+        keep_indices = tf.squeeze(tf.where(keep_bool), axis=1)
+
+        boxes = tf.gather(boxes1, keep_indices)
+        return boxes, keep_indices
 
 
-def _change_coordinate_frame(boxes, window):
+def change_coordinate_frame(boxes, window):
     """Change coordinate frame of the boxes to be relative to window's frame.
 
     Arguments:
@@ -170,11 +174,11 @@ def _change_coordinate_frame(boxes, window):
             ymin/win_height, xmin/win_width,
             ymax/win_height, xmax/win_width
         ], axis=1)
-        boxes = tf.clip_by_value(boxes, clip_value_min=0.0, clip_value_max=1.0)
+        boxes = tf.clip_by_value(boxes, 0.0, 1.0)
         return boxes
 
 
-def _ioa(boxes1, boxes2):
+def ioa(boxes1, boxes2):
     """Computes pairwise intersection-over-area between box collections.
     intersection-over-area (IOA) between two boxes box1 and box2 is defined as
     their intersection area over box2's area. Note that ioa is not symmetric,
@@ -189,4 +193,4 @@ def _ioa(boxes1, boxes2):
     with tf.name_scope('ioa'):
         intersections = intersection(boxes1, boxes2)  # shape [N, M]
         areas = tf.expand_dims(area(boxes2), 0)  # shape [1, M]
-        return tf.divide(intersections, areas)
+        return tf.clip_by_value(tf.divide(intersections, areas + EPSILON), 0.0, 1.0)

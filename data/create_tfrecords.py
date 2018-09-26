@@ -1,14 +1,14 @@
 import io
 import os
-import PIL.Image
+from PIL import Image
 import tensorflow as tf
+import numpy as np
 import json
 import shutil
 import random
 import math
 import argparse
 from tqdm import tqdm
-import sys
 
 
 """
@@ -21,21 +21,22 @@ Example of a json annotation (with filename "132416.json"):
 {
   "object": [
     {"bndbox": {"ymin": 20, "ymax": 276, "xmax": 1219, "xmin": 1131}, "name": "dog"},
-    {"bndbox": {"ymin": 1, "ymax": 248, "xmax": 1149, "xmin": 1014}, "name": "person"}
+    {"bndbox": {"ymin": 1, "ymax": 248, "xmax": 1149, "xmin": 1014}, "name": "face"}
   ],
   "filename": "132416.jpg",
   "size": {"depth": 3, "width": 1920, "height": 1080}
 }
 
+Labels text file contains a list of all label names.
+One label name per line. Number of line - label encoding by integer.
+
 Example of use:
 python create_tfrecords.py \
-    --image_dir=/home/dan/datasets/BBA/images_val/ \
-    --annotations_dir=/home/dan/datasets/BBA/annotations_val/ \
-    --output=data/train_shards/ \
-    --labels=data/labels.txt \
+    --image_dir=/mnt/datasets/dan/wider_train/images/ \
+    --annotations_dir=/mnt/datasets/dan/wider_train/annotations/ \
+    --output=/mnt/datasets/dan/wider_train_shards/ \
+    --labels=wider_labels.txt \
     --num_shards=100
-
-labels is a .txt file where each line is a class name.
 """
 
 
@@ -49,7 +50,7 @@ def make_args():
     return parser.parse_args()
 
 
-def dict_to_tf_example(annotation, image_dir, labels):
+def dict_to_tf_example(annotation, image_dir, label_encoder):
     """Convert dict to tf.Example proto.
 
     Notice that this function normalizes the bounding
@@ -58,7 +59,7 @@ def dict_to_tf_example(annotation, image_dir, labels):
     Arguments:
         data: a dict.
         image_dir: a string, path to the image directory.
-        labels: a dict, class name -> unique integer.
+        label_encoder: a dict, class name -> integer.
     Returns:
         an instance of tf.Example.
     """
@@ -71,46 +72,54 @@ def dict_to_tf_example(annotation, image_dir, labels):
 
     # check image format
     encoded_jpg_io = io.BytesIO(encoded_jpg)
-    image = PIL.Image.open(encoded_jpg_io)
+    image = Image.open(encoded_jpg_io)
+    if image.mode == 'L':  # if grayscale
+        rgb_image = np.stack(3*[np.array(image)], axis=2)
+        encoded_jpg = to_jpeg_bytes(rgb_image)
+        encoded_jpg_io = io.BytesIO(encoded_jpg)
+        image = Image.open(encoded_jpg_io)
+    elif image.mode != 'RGB':
+        return None
     if image.format != 'JPEG':
-        raise ValueError('Image format not JPEG!')
+        return None
+    assert image.mode == 'RGB'
 
     width = int(annotation['size']['width'])
     height = int(annotation['size']['height'])
-    assert width > 0 and height > 0
+    assert width > 1 and height > 1
     assert image.size[0] == width and image.size[1] == height
-    ymin, xmin, ymax, xmax, classes = [], [], [], [], []
-
-    just_name = image_name[:-4] if image_name.endswith('.jpg') else image_name[:-5]
-    annotation_name = just_name + '.json'
-    if len(annotation['object']) == 0:
-        print(annotation_name, 'is without any objects!')
+    ymin, xmin, ymax, xmax, labels = [], [], [], [], []
 
     for obj in annotation['object']:
+
+        # it is assumed that all box coordinates are in
+        # ranges [0, height] and [0, width]
+
         a = float(obj['bndbox']['ymin'])/height
         b = float(obj['bndbox']['xmin'])/width
         c = float(obj['bndbox']['ymax'])/height
         d = float(obj['bndbox']['xmax'])/width
+        label = label_encoder[obj['name']]
+
         assert (a < c) and (b < d)
+        assert (a <= 1.0) and (a >= 0.0)
+        assert (b <= 1.0) and (b >= 0.0)
+        assert (c <= 1.0) and (c >= 0.0)
+        assert (d <= 1.0) and (d >= 0.0)
 
         ymin.append(a)
         xmin.append(b)
         ymax.append(c)
         xmax.append(d)
-        try:
-            classes.append(labels[obj['name']])
-        except KeyError:
-            print(annotation_name, 'has unknown label!')
-            sys.exit(1)
+        labels.append(label)
 
     example = tf.train.Example(features=tf.train.Features(feature={
-        'filename': _bytes_feature(image_name.encode()),
         'image': _bytes_feature(encoded_jpg),
         'xmin': _float_list_feature(xmin),
         'xmax': _float_list_feature(xmax),
         'ymin': _float_list_feature(ymin),
         'ymax': _float_list_feature(ymax),
-        'labels': _int64_list_feature(classes),
+        'labels': _int64_list_feature(labels)
     }))
     return example
 
@@ -119,12 +128,19 @@ def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
+def _float_list_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+
 def _int64_list_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
-def _float_list_feature(value):
-    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+def to_jpeg_bytes(array):
+    image = Image.fromarray(array)
+    tmp = io.BytesIO()
+    image.save(tmp, format='jpeg')
+    return tmp.getvalue()
 
 
 def main():
@@ -134,6 +150,7 @@ def main():
         labels = {line.strip(): i for i, line in enumerate(f.readlines()) if line.strip()}
     assert len(labels) > 0
     print('Possible labels (and label encoding):', labels)
+    print('Number of classes:', len(labels), '\n')
 
     image_dir = ARGS.image_dir
     annotations_dir = ARGS.annotations_dir
@@ -141,6 +158,7 @@ def main():
     print('Reading annotations from:', annotations_dir, '\n')
 
     examples_list = os.listdir(annotations_dir)
+    random.shuffle(examples_list)
     num_examples = len(examples_list)
     print('Number of images:', num_examples)
 
@@ -154,6 +172,7 @@ def main():
 
     shard_id = 0
     num_examples_written = 0
+    num_skipped_images = 0
     for example in tqdm(examples_list):
 
         if num_examples_written == 0:
@@ -162,7 +181,10 @@ def main():
 
         path = os.path.join(annotations_dir, example)
         annotation = json.load(open(path))
-        tf_example = dict_to_tf_example(annotation, image_dir, labels)
+        tf_example = dict_to_tf_example(annotation, image_dir, label_encoder=labels)
+        if tf_example is None:
+            num_skipped_images += 1
+            continue
         writer.write(tf_example.SerializeToString())
         num_examples_written += 1
 
@@ -171,10 +193,12 @@ def main():
             num_examples_written = 0
             writer.close()
 
-    if num_examples_written != shard_size and num_examples % num_shards != 0:
+    # this happens if num_examples % num_shards != 0
+    if num_examples_written != 0:
         writer.close()
 
     print('Result is here:', ARGS.output)
+    print('Number of skipped images:', num_skipped_images)
 
 
 main()

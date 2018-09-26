@@ -1,5 +1,5 @@
 import tensorflow as tf
-from src.utils import batch_decode
+from detector.utils import batch_decode
 
 
 def localization_loss(predictions, targets, weights):
@@ -24,9 +24,9 @@ def localization_loss(predictions, targets, weights):
 def classification_loss(predictions, targets):
     """
     Arguments:
-        predictions: a float tensor with shape [batch_size, num_anchors, num_classes + 1],
+        predictions: a float tensor with shape [batch_size, num_anchors, num_classes],
             representing the predicted logits for each class.
-        targets: a float tensor with shape [batch_size, num_anchors, num_classes + 1],
+        targets: a float tensor with shape [batch_size, num_anchors, num_classes],
             representing one-hot encoded classification targets.
     Returns:
         a float tensor with shape [batch_size, num_anchors].
@@ -37,20 +37,46 @@ def classification_loss(predictions, targets):
     return tf.reduce_sum(cross_entropy, axis=2)
 
 
+def focal_loss(predictions, targets, gamma=2.0, alpha=0.25):
+    """
+    Arguments:
+        predictions: a float tensor with shape [batch_size, num_anchors, num_classes],
+            representing the predicted logits for each class.
+        targets: a float tensor with shape [batch_size, num_anchors, num_classes],
+            representing one-hot encoded classification targets.
+    Returns:
+        a float tensor with shape [batch_size, num_anchors].
+    """
+
+    negative_log_p_t = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets, logits=predictions)
+    probabilities = tf.sigmoid(predictions)
+    p_t = targets * probabilities + (1.0 - targets) * (1.0 - probabilities)
+    # they all have shape [batch_size, num_anchors, num_classes]
+
+    modulating_factor = tf.pow(1.0 - p_t, gamma)
+    alpha_t = targets * alpha + (1.0 - targets) * (1.0 - alpha)
+    focal_loss = alpha_t * modulating_factor * negative_log_p_t
+    # they all have shape [batch_size, num_anchors, num_classes]
+
+    return tf.reduce_sum(focal_loss, axis=2)
+
+
 def apply_hard_mining(
-        location_losses, cls_losses,
-        class_predictions_with_background, box_encodings, matches,
-        anchors, loss_to_use='classification',
+        loc_losses, cls_losses,
+        encoded_boxes, class_predictions,
+        matches, anchors,
+        loss_to_use='classification',
         loc_loss_weight=1.0, cls_loss_weight=1.0,
         num_hard_examples=3000, nms_threshold=0.99,
         max_negatives_per_positive=3, min_negatives_per_image=0):
-    """Applies hard mining to anchorwise losses.
+    """
+    Online hard example mining (OHEM) implementation.
 
     Arguments:
-        location_losses: a float tensor with shape [batch_size, num_anchors].
+        loc_losses: a float tensor with shape [batch_size, num_anchors].
         cls_losses: a float tensor with shape [batch_size, num_anchors].
-        box_encodings: a float tensor with shape [batch_size, num_anchors, 4].
-        class_predictions_with_background: a float tensor with shape [batch_size, num_anchors, num_classes + 1].
+        encoded_boxes: a float tensor with shape [batch_size, num_anchors, 4].
+        class_predictions: a float tensor with shape [batch_size, num_anchors, num_classes].
         matches: an int tensor with shape [batch_size, num_anchors].
         anchors: a float tensor with shape [num_anchors, 4].
         loss_to_use: a string, only possible values are ['classification', 'both'].
@@ -63,56 +89,56 @@ def apply_hard_mining(
     Returns:
         two float tensors with shape [].
     """
-    decoded_boxes = batch_decode(box_encodings, anchors)
+    decoded_boxes = batch_decode(encoded_boxes, anchors)
     # it has shape [batch_size, num_anchors, 4]
 
     # all these tensors must have static first dimension (batch size)
     decoded_boxes_list = tf.unstack(decoded_boxes, axis=0)
-    location_losses_list = tf.unstack(location_losses, axis=0)
+    loc_losses_list = tf.unstack(loc_losses, axis=0)
     cls_losses_list = tf.unstack(cls_losses, axis=0)
     matches_list = tf.unstack(matches, axis=0)
     # they all lists with length = batch_size
 
-    batch_size = len(decoded_boxes_list)
+    mined_loc_losses, mined_cls_losses = [], []
     num_positives_list, num_negatives_list = [], []
-    mined_location_losses, mined_cls_losses = [], []
 
-    # do OHEM for each image in the batch
-    for i, box_locations in enumerate(decoded_boxes_list):
+    # do ohem for each image in the batch
+    for i, boxes in enumerate(decoded_boxes_list):
+
         image_losses = cls_losses_list[i] * cls_loss_weight
         if loss_to_use == 'both':
-            image_losses += (location_losses_list[i] * loc_loss_weight)
+            image_losses += (loc_losses_list[i] * loc_loss_weight)
         # it has shape [num_anchors]
 
         selected_indices = tf.image.non_max_suppression(
-            box_locations, image_losses, num_hard_examples, nms_threshold
+            boxes, image_losses, num_hard_examples, nms_threshold
         )
-        selected_indices, num_positives, num_negatives = _subsample_selection_to_desired_neg_pos_ratio(
+        subsampled = subsample_selection_to_desired_neg_pos_ratio(
              selected_indices, matches_list[i],
              max_negatives_per_positive, min_negatives_per_image
         )
+        selected_indices, num_positives, num_negatives = subsampled
+
+        mined_loc_losses.append(tf.gather(loc_losses_list[i], selected_indices))
+        mined_cls_losses.append(tf.gather(cls_losses_list[i], selected_indices))
         num_positives_list.append(num_positives)
         num_negatives_list.append(num_negatives)
-        mined_location_losses.append(
-            tf.reduce_sum(tf.gather(location_losses_list[i], selected_indices))
-        )
-        mined_cls_losses.append(
-            tf.reduce_sum(tf.gather(cls_losses_list[i], selected_indices))
-        )
 
-    mean_num_positives = tf.reduce_mean(tf.stack(num_positives_list, axis=0))
-    mean_num_negatives = tf.reduce_mean(tf.stack(num_negatives_list, axis=0))
+    mean_num_positives = tf.reduce_mean(tf.stack(num_positives_list, axis=0), axis=0)
+    mean_num_negatives = tf.reduce_mean(tf.stack(num_negatives_list, axis=0), axis=0)
     tf.summary.scalar('mean_num_positives', mean_num_positives)
     tf.summary.scalar('mean_num_negatives', mean_num_negatives)
 
-    location_loss = tf.reduce_sum(tf.stack(mined_location_losses, axis=0))
-    cls_loss = tf.reduce_sum(tf.stack(mined_cls_losses, axis=0))
-    return location_loss, cls_loss
+    loc_loss = tf.reduce_sum(tf.concat(mined_loc_losses, axis=0), axis=0)
+    cls_loss = tf.reduce_sum(tf.concat(mined_cls_losses, axis=0), axis=0)
+    return loc_loss, cls_loss
 
 
-def _subsample_selection_to_desired_neg_pos_ratio(
+def subsample_selection_to_desired_neg_pos_ratio(
         indices, match, max_negatives_per_positive, min_negatives_per_image):
-    """Subsample a collection of selected indices to a desired neg:pos ratio.
+    """
+    Subsample a collection of selected indices
+    to a desired negative to positive ratio.
 
     Arguments:
         indices: an int or long tensor with shape [M],

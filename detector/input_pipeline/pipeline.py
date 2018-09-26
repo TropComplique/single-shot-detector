@@ -1,9 +1,8 @@
 import tensorflow as tf
 
-from src.constants import SHUFFLE_BUFFER_SIZE, NUM_THREADS, RESIZE_METHOD,\
-    CYCLE_LENGTH, BLOCK_LENGTH
-from src.input_pipeline.random_image_crop import random_image_crop
-from src.input_pipeline.other_augmentations import random_color_manipulations,\
+from detector.constants import SHUFFLE_BUFFER_SIZE, NUM_PARALLEL_CALLS, RESIZE_METHOD
+from .random_image_crop import random_image_crop
+from .other_augmentations import random_color_manipulations,\
     random_flip_left_right, random_pixel_value_scale, random_jitter_boxes,\
     random_black_patches
 
@@ -11,23 +10,24 @@ from src.input_pipeline.other_augmentations import random_color_manipulations,\
 class Pipeline:
     """Input pipeline for training or evaluating object detectors."""
 
-    def __init__(self, filenames, batch_size, image_size,
-                 repeat=False, shuffle=False, augmentation=False):
+    def __init__(self, filenames, batch_size, is_training, image_size=None):
         """
         Note: when evaluating set batch_size to 1.
+        And we don't resize images when evaluating.
 
         Arguments:
             filenames: a list of strings, paths to tfrecords files.
             batch_size: an integer.
-            image_size: a list with two integers [width, height],
+            is_training: a boolean.
+            image_size: a list with two integers [height, width] or None,
                 images of this size will be in a batch.
-            repeat: a boolean, whether repeat indefinitely.
-            shuffle: whether to shuffle the dataset.
-            augmentation: whether to do data augmentation.
         """
-        self.image_width, self.image_height = image_size
-        self.augmentation = augmentation
-        self.batch_size = batch_size
+        if not is_training:
+            assert batch_size == 1
+            self.image_size = [None, None]
+        else:
+            assert image_size is not None
+            self.image_size = image_size
 
         def get_num_samples(filename):
             return sum(1 for _ in tf.python_io.tf_record_iterator(filename))
@@ -46,49 +46,20 @@ class Pipeline:
         if shuffle:
             dataset = dataset.shuffle(buffer_size=num_shards)
 
-        # you cannot set cycle_length too hight
-        cycle_length = min(CYCLE_LENGTH, num_shards)
-
-        dataset = dataset.interleave(
-            lambda filename: tf.data.TFRecordDataset(filename),
-            cycle_length=cycle_length, block_length=BLOCK_LENGTH
-        )
+        dataset = dataset.flat_map(tf.data.TFRecordDataset)
         dataset = dataset.prefetch(buffer_size=batch_size)
 
         if shuffle:
             dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
-        dataset = dataset.repeat(None if repeat else 1)
-        dataset = dataset.map(self._parse_and_preprocess, num_parallel_calls=NUM_THREADS)
+        dataset = dataset.repeat(None if is_training else 1)
+        dataset = dataset.map(self._parse_and_preprocess, num_parallel_calls=NUM_PARALLEL_CALLS)
 
         # we need batches of fixed size
-        padded_shapes = ([3, self.image_height, self.image_width], [None, 4], [None], [], [])
-        dataset = dataset.apply(
-           tf.contrib.data.padded_batch_and_drop_remainder(batch_size, padded_shapes)
-        )
+        padded_shapes = (self.image_size + [3], [None, 4], [None], [])
+        dataset = dataset.padded_batch(batch_size, padded_shapes, drop_remainder=True)
         dataset = dataset.prefetch(buffer_size=1)
 
-        self.iterator = tf.data.Iterator.from_structure(
-            dataset.output_types,
-            dataset.output_shapes
-        )
-        self.init = self.iterator.make_initializer(dataset)
-
-    def get_batch(self):
-        """
-        Returns:
-            features: a dict with the following keys
-                'images': a float tensor with shape [batch_size, 3, image_height, image_width].
-                'filenames': a string tensor with shape [batch_size].
-            labels: a dict with the following keys
-                'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
-                'labels': an int tensor with shape [batch_size, max_num_boxes].
-                'num_boxes': an int tensor with shape [batch_size].
-            where max_num_boxes = max(num_boxes).
-        """
-        images, boxes, labels, num_boxes, filenames = self.iterator.get_next()
-        features = {'images': images, 'filenames': filenames}
-        labels = {'boxes': boxes, 'labels': labels, 'num_boxes': num_boxes}
-        return features, labels
+        self.dataset = dataset
 
     def _parse_and_preprocess(self, example_proto):
         """What this function does:
@@ -96,15 +67,13 @@ class Pipeline:
         2. (optionally) Augments it.
 
         Returns:
-            image: a float tensor with shape [3, image_height, image_width],
+            image: a float tensor with shape [image_height, image_width, 3],
                 an RGB image with pixel values in the range [0, 1].
             boxes: a float tensor with shape [num_boxes, 4].
             labels: an int tensor with shape [num_boxes].
             num_boxes: an int tensor with shape [].
-            filename: a string tensor with shape [].
         """
         features = {
-            'filename': tf.FixedLenFeature([], tf.string),
             'image': tf.FixedLenFeature([], tf.string),
             'ymin': tf.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
             'xmin': tf.FixedLenSequenceFeature([], tf.float32, allow_missing=True),
@@ -123,27 +92,21 @@ class Pipeline:
         labels = tf.to_int32(parsed_features['labels'])
 
         # get groundtruth boxes, they must be in from-zero-to-one format
-        boxes = tf.stack([
+        boxes = tf.to_float(tf.stack([
             parsed_features['ymin'], parsed_features['xmin'],
             parsed_features['ymax'], parsed_features['xmax']
-        ], axis=1)
-        boxes = tf.to_float(boxes)
-        boxes = tf.clip_by_value(boxes, clip_value_min=0.0, clip_value_max=1.0)
+        ], axis=1))
 
-        if self.augmentation:
-            image, boxes, labels = self._augmentation_fn(image, boxes, labels)
-        else:
-            image = tf.image.resize_images(
-                image, [self.image_height, self.image_width],
-                method=RESIZE_METHOD
-            )
+        if self.is_training:
+            image, boxes, labels = self.augmentation(image, boxes, labels)
 
-        image = tf.transpose(image, perm=[2, 0, 1])  # to NCHW format
-        num_boxes = tf.to_int32(tf.shape(boxes)[0])
-        filename = parsed_features['filename']
-        return image, boxes, labels, num_boxes, filename
+        # we need `num_boxes` because we pad boxes and labels with zeros for batching
 
-    def _augmentation_fn(self, image, boxes, labels):
+        features = {'images': image}
+        labels = {'boxes': boxes, 'labels': labels, 'num_boxes': tf.to_int32(tf.shape(boxes)[0])}
+        return features, labels
+
+    def augmentation(self, image, boxes, labels):
         # there are a lot of hyperparameters here,
         # you will need to tune them all, haha
 
@@ -154,11 +117,7 @@ class Pipeline:
             area_range=(0.333, 0.9),
             overlap_thresh=0.3
         )
-        image = tf.image.resize_images(
-            image, [self.image_height, self.image_width],
-            method=RESIZE_METHOD
-        )
-        # if you do color augmentations before resizing, it will be very slow!
+        image = tf.image.resize_images(image, self.image_size, method=RESIZE_METHOD)
 
         image = random_color_manipulations(image, probability=0.25, grayscale_probability=0.05)
         image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.25)

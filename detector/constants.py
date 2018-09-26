@@ -1,5 +1,11 @@
 import tensorflow as tf
 
+MIN_LEVEL=3
+
+BATCH_NORM_EPSILON = 1e-3
+
+POSITIVES_THRESHOLD, NEGATIVES_THRESHOLD
+
 # a small value
 EPSILON = 1e-8
 

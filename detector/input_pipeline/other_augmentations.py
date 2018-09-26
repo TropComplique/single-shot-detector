@@ -1,22 +1,30 @@
 import tensorflow as tf
 
+
 """
 There are various data augmentations for training object detectors.
 
 `image` is assumed to be a float tensor with shape [height, width, 3],
 it is a RGB image with pixel values in range [0, 1].
+
+And box coordinates are normalized.
 """
 
 
-def random_color_manipulations(image, probability=0.5, grayscale_probability=0.1):
+def random_color_manipulations(image, probability=0.1, grayscale_probability=0.1):
 
     def manipulate(image):
-        # intensity and order of this operations are kinda random,
-        # so you will need to tune this for you problem
-        image = tf.image.random_brightness(image, 0.1)
-        image = tf.image.random_contrast(image, 0.8, 1.2)
-        image = tf.image.random_hue(image, 0.2)
-        image = tf.image.random_saturation(image, 0.8, 1.2)
+        br_delta = tf.random_uniform([], -32.0/255.0, 32.0/255.0)
+        cb_factor = tf.random_uniform([], -0.1, 0.1)
+        cr_factor = tf.random_uniform([], -0.1, 0.1)
+        channels = tf.split(axis=2, num_or_size_splits=3, value=image)
+        red_offset = 1.402 * cr_factor + br_delta
+        green_offset = -0.344136 * cb_factor - 0.714136 * cr_factor + br_delta
+        blue_offset = 1.772 * cb_factor + br_delta
+        channels[0] += red_offset
+        channels[1] += green_offset
+        channels[2] += blue_offset
+        image = tf.concat(axis=2, values=channels)
         image = tf.clip_by_value(image, 0.0, 1.0)
         return image
 
@@ -30,8 +38,8 @@ def random_color_manipulations(image, probability=0.5, grayscale_probability=0.1
         image = tf.cond(do_it, lambda: manipulate(image), lambda: image)
 
     with tf.name_scope('to_grayscale'):
-        make_gray = tf.less(tf.random_uniform([]), grayscale_probability)
-        image = tf.cond(make_gray, lambda: to_grayscale(image), lambda: image)
+        do_it = tf.less(tf.random_uniform([]), grayscale_probability)
+        image = tf.cond(do_it, lambda: to_grayscale(image), lambda: image)
 
     return image
 
@@ -52,7 +60,7 @@ def random_flip_left_right(image, boxes):
         return image, boxes
 
 
-def random_pixel_value_scale(image, minval=0.9, maxval=1.1, probability=0.5):
+def random_pixel_value_scale(image, minval=0.9, maxval=1.1, probability=0.1):
     """This function scales each pixel independently of the other ones.
 
     Arguments:
@@ -99,7 +107,7 @@ def random_jitter_boxes(boxes, ratio=0.05):
         Returns:
             a float tensor with shape [4].
         """
-        ymin, xmin, ymax, xmax = [box[i] for i in range(4)]
+        ymin, xmin, ymax, xmax = tf.unstack(box, axis=0)
         box_height, box_width = ymax - ymin, xmax - xmin
         hw_coefs = tf.stack([box_height, box_width, box_height, box_width])
 
@@ -120,9 +128,7 @@ def random_jitter_boxes(boxes, ratio=0.05):
         return distorted_boxes
 
 
-def random_black_patches(
-        image, max_patches=10,
-        probability=0.5, size_to_image_ratio=0.1):
+def random_black_patches(image, max_patches=10, probability=0.5, size_to_image_ratio=0.1):
     """Randomly adds black patches to the image.
 
     Arguments:
@@ -136,7 +142,8 @@ def random_black_patches(
         a float tensor with shape [height, width, 3].
     """
     def add_patch_to_image(image):
-        image_height, image_width = image.shape.as_list()[:2]
+        image_height = tf.shape(image)[1]
+        image_width = tf.shape(image)[2]
         box_size = tf.to_int32(tf.multiply(
             tf.minimum(tf.to_float(image_height), tf.to_float(image_width)),
             size_to_image_ratio

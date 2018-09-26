@@ -1,5 +1,5 @@
 import tensorflow as tf
-from src.constants import PARALLEL_ITERATIONS
+from detector.constants import PARALLEL_ITERATIONS
 
 
 def multiclass_non_max_suppression(
@@ -11,7 +11,7 @@ def multiclass_non_max_suppression(
     threshold prior to applying NMS.
 
     Arguments:
-        boxes: a float tensor with shape [N, 4],
+        boxes: a float tensor with shape [N, num_classes, 4],
             normalized to [0, 1] range.
         scores: a float tensor with shape [N, num_classes].
         score_thresh: a float number.
@@ -22,27 +22,22 @@ def multiclass_non_max_suppression(
         selected_scores: a float tensor with shape [N'].
         selected_classes: an int tensor with shape [N'].
 
-        where 0 <= N' <= N.
+        where 0 <= N' <= num_classes * max_boxes_per_class.
     """
+    boxes_list = tf.unstack(boxes, axis=1)
     scores_list = tf.unstack(scores, axis=1)
-    # num_classes equals to len(scores_list)
+
     selected_boxes, selected_scores, selected_classes = [], [], []
-
-    for label, class_scores in enumerate(scores_list):
-
-        # low scoring boxes are removed
-        ids = tf.where(tf.greater_equal(class_scores, score_threshold))
-        ids = tf.squeeze(ids, axis=1)
-        class_boxes = tf.gather(boxes, ids)
-        class_scores = tf.gather(class_scores, ids)
+    for i in range(len(boxes_list)):
 
         selected_indices = tf.image.non_max_suppression(
-            class_boxes, class_scores,
-            max_boxes_per_class, iou_threshold
+            boxes_list[i], scores_list[i], max_output_size=max_boxes_per_class,
+            iou_threshold=iou_threshold, score_threshold=score_threshold
         )
-        selected_boxes += [tf.gather(class_boxes, selected_indices)]
-        selected_scores += [tf.gather(class_scores, selected_indices)]
-        selected_classes += [label * tf.ones_like(selected_indices)]
+
+        selected_boxes += [tf.gather(boxes_list[i], selected_indices)]
+        selected_scores += [tf.gather(scores_list[i], selected_indices)]
+        selected_classes += [i * tf.ones_like(selected_indices)]
 
     selected_boxes = tf.concat(selected_boxes, axis=0)
     selected_scores = tf.concat(selected_scores, axis=0)
@@ -51,13 +46,12 @@ def multiclass_non_max_suppression(
 
 
 def batch_multiclass_non_max_suppression(
-        boxes, scores,
-        score_threshold, iou_threshold,
-        max_boxes_per_class, num_classes):
+        boxes, scores, score_threshold,
+        iou_threshold, max_boxes_per_class):
     """Same as multiclass_non_max_suppression but for a batch of images.
 
     Arguments:
-        boxes: a float tensor with shape [batch_size, N, 4].
+        boxes: a float tensor with shape [batch_size, N, num_classes, 4].
         scores: a float tensor with shape [batch_size, N, num_classes].
     Returns:
         boxes: a float tensor with shape [batch_size, N', 4].
@@ -70,9 +64,8 @@ def batch_multiclass_non_max_suppression(
     def fn(x):
         boxes, scores = x
         boxes, scores, classes = multiclass_non_max_suppression(
-            boxes, scores,
-            score_threshold, iou_threshold,
-            max_boxes_per_class
+            boxes, scores, score_threshold,
+            iou_threshold, max_boxes_per_class
         )
         num_boxes = tf.to_int32(tf.shape(boxes)[0])
         max_detections = max_boxes_per_class * num_classes
