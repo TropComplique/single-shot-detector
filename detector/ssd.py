@@ -1,10 +1,9 @@
 import tensorflow as tf
-import math
 
 from detector.constants import PARALLEL_ITERATIONS, POSITIVES_THRESHOLD, NEGATIVES_THRESHOLD
-from detector.utils import batch_multiclass_non_max_suppression, batch_decode
+from detector.utils import batch_multiclass_non_max_suppression
 from detector.training_target_creation import get_training_targets
-from detector.losses import localization_loss, classification_loss, apply_hard_mining
+from detector.losses import localization_loss, usual_classification_loss, focal_loss, apply_hard_mining
 
 
 class SSD:
@@ -40,7 +39,7 @@ class SSD:
         # `encoded_boxes` has shape [batch_size, num_anchors, num_classes, 4],
         # `class_predictions` has shape [batch_size, num_anchors, num_classes]
 
-    def get_predictions(self, score_threshold=0.1, iou_threshold=0.6, max_boxes_per_class=20):
+    def get_predictions(self, score_threshold=0.05, iou_threshold=0.5, max_boxes_per_class=20):
         """Postprocess outputs of the network.
 
         Returns:
@@ -50,19 +49,11 @@ class SSD:
             num_boxes: an int tensor with shape [batch_size], it
                 represents the number of detections on an image.
 
-            where N = num_classes * max_boxes_per_class.
+            Where N = num_classes * max_boxes_per_class.
         """
         with tf.name_scope('postprocessing'):
 
-            num_anchors = tf.shape(self.anchors)[0]
             encoded_boxes = self.raw_predictions['encoded_boxes']
-            # it has shape [batch_size, num_anchors, num_classes, 4]
-
-            encoded_boxes = tf.transpose(encoded_boxes, [0, 2, 1, 3])
-            encoded_boxes = tf.reshape(encoded_boxes, [-1, num_anchors, 4])
-            boxes = batch_decode(encoded_boxes, self.anchors)
-            boxes = tf.reshape(boxes, [-1, self.num_classes, num_anchors, 4])
-            boxes = tf.transpose(boxes, [0, 2, 1, 3])
             # it has shape [batch_size, num_anchors, num_classes, 4]
 
             class_predictions = self.raw_predictions['class_predictions']
@@ -71,8 +62,9 @@ class SSD:
 
         with tf.name_scope('nms'):
             boxes, scores, classes, num_detections = batch_multiclass_non_max_suppression(
-                boxes, scores, score_threshold, iou_threshold,
-                max_boxes_per_class, self.num_classes
+                encoded_boxes, self.anchors, scores,
+                score_threshold, iou_threshold,
+                max_boxes_per_class
             )
         return {'boxes': boxes, 'labels': classes, 'scores': scores, 'num_boxes': num_detections}
 
@@ -83,7 +75,7 @@ class SSD:
             groundtruth: a dict with the following keys
                 'boxes': a float tensor with shape [batch_size, max_num_boxes, 4].
                 'labels': an int tensor with shape [batch_size, max_num_boxes].
-                'num_boxes': an int tensor with shape [batch_size].
+                'num_boxes': an int tensor with shape [batch_size],
                     where max_num_boxes = max(num_boxes).
             params: a dict with parameters.
         Returns:
@@ -95,23 +87,6 @@ class SSD:
 
             # whether anchor is matched
             weights = tf.to_float(tf.greater_equal(matches, 0))
-
-            with tf.name_scope('localization_loss'):
-
-                encoded_boxes = self.raw_predictions['encoded_boxes']
-                # it has shape [batch_size, num_anchors, num_classes, 4]
-
-                encoded_boxes = tf.pad(encoded_boxes, [[0, 0], [0, 0], [1, 0], [0, 0]])
-                # now it has shape [batch_size, num_anchors, num_classes + 1, 4]
-
-                class_indices = cls_targets  # shape [batch_size, num_anchors]
-                proposal_indices = tf.range(tf.size(class_indices), dtype=tf.int32)
-                indices = tf.stack([proposal_indices, class_indices], axis=1)  # shape [num_proposals_i, 2]
-                encoded_boxes = tf.gather_nd(encoded_boxes, indices)  # shape [num_proposals_i, 4]
-                # i did this because different classes don't share boxes
-
-                loc_losses = localization_loss(encoded_boxes, reg_targets, weights)
-                # shape [batch_size, num_anchors]
 
             with tf.name_scope('classification_loss'):
 
@@ -125,15 +100,34 @@ class SSD:
                 cls_targets = tf.to_float(cls_targets[:, :, 1:])
                 # now background represented by all zeros
 
+                not_ignore = tf.to_float(tf.greater_equal(matches, -1))
+                # if a value is `-2` then we ignore its anchor
+
                 if params['use_focal_loss']:
                     cls_losses = focal_loss(
-                        class_predictions, cls_targets,
+                        class_predictions, cls_targets, weights=not_ignore,
                         gamma=params['gamma'], alpha=params['alpha']
                     )
                 else:
-                    cls_losses = classification_loss(class_predictions, cls_targets)
-
+                    cls_losses = usual_classification_loss(
+                        class_predictions, cls_targets,
+                        weights=not_ignore
+                    )
                 # `cls_losses` has shape [batch_size, num_anchors]
+
+            with tf.name_scope('localization_loss'):
+
+                encoded_boxes = self.raw_predictions['encoded_boxes']
+                # it has shape [batch_size, num_anchors, num_classes, 4]
+
+                # choose only boxes of a true class
+                cls_targets = tf.expand_dims(cls_targets, axis=3)
+                encoded_boxes *= cls_targets
+                encoded_boxes = tf.reduce_sum(encoded_boxes, axis=2)
+                # it has shape [batch_size, num_anchors, 4]
+
+                loc_losses = localization_loss(encoded_boxes, reg_targets, weights)
+                # shape [batch_size, num_anchors]
 
             with tf.name_scope('normalization'):
                 matches_per_image = tf.reduce_sum(weights, axis=1)  # shape [batch_size]
@@ -149,8 +143,7 @@ class SSD:
                 with tf.name_scope('ohem'):
                     loc_loss, cls_loss = apply_hard_mining(
                         loc_losses, cls_losses,
-                        encoded_boxes, class_predictions,
-                        matches, anchors,
+                        encoded_boxes, matches, anchors,
                         loss_to_use=params['loss_to_use'],
                         loc_loss_weight=params['loc_loss_weight'],
                         cls_loss_weight=params['cls_loss_weight'],
@@ -175,7 +168,7 @@ class SSD:
         """
         index = 0
         for i, n in enumerate(self.num_anchors_per_feature_map):
-            k = math.ceil(n * 0.20)  # top 20%
+            k = tf.to_int32(tf.ceil(n * 0.20))  # top 20%
             biggest_values, _ = tf.nn.top_k(tensor[:, index:(index + n)], k, sorted=False)
             # it has shape [batch_size, k]
             tf.summary.histogram(

@@ -23,7 +23,7 @@ class FeatureExtractor(ABC):
         pass
 
 
-class SSDFeatureExtractor:
+class SSDFeatureExtractor(FeatureExtractor):
 
     def __call__(self, images):
 
@@ -32,17 +32,17 @@ class SSDFeatureExtractor:
         x = features['c5']
 
         filters = [512, 256, 256, 128]
-        for i, num_filters in enumerate(filters, 2):
-            x = conv2d_same(x, num_filters // 2, kernel_size=1, name='conv1x1_%d' % i)
-            x = batch_norm_relu(x, is_training, use_relu=True, name=n)
-            x = conv2d_same(x, num_filters, kernel_size=3, stride=2, name='conv3x3_%d' % i)
-            x = batch_norm_relu(x, is_training, use_relu=True, name=n)
+        for i, num_filters in enumerate(filters):
+            x = conv2d_same(x, num_filters // 2, kernel_size=1, name='conv1_%d' % i)
+            x = batch_norm_relu(x, self.is_training, name='batch_norm1_%d' % i)
+            x = conv2d_same(x, num_filters, kernel_size=3, stride=2, name='conv2_%d' % i)
+            x = batch_norm_relu(x, self.is_training, name='batch_norm2_%d' % i)
             image_features.append(x)
 
         return image_features
 
 
-class RetinaNetFeatureExtractor:
+class RetinaNetFeatureExtractor(FeatureExtractor):
 
     def __call__(self, images):
         features = self.backbone(images, self.is_training)
@@ -58,13 +58,13 @@ class RetinaNetFeatureExtractor:
 def fpn(features, is_training, min_level=3, scope='fpn'):
     """
     Arguments:
-        features: a dict with four float tensors.
+        features: a dict with three float tensors.
             It must have keys ['c3', 'c4', 'c5'].
             Where a number means that a feature has stride `2**number`.
         is_training: a boolean.
         min_level: an integer, minimal feature stride
             that will be used is `2**min_level`.
-            Possible values are [3, 4]
+            Possible values are [3, 4, 5]
         scope: a string.
     Returns:
         a dict with float tensors.
@@ -73,15 +73,14 @@ def fpn(features, is_training, min_level=3, scope='fpn'):
     with tf.variable_scope(scope):
 
         x = conv2d_same(features['c5'], 256, kernel_size=1, name='lateral5')
-        p5 = conv2d_same(features['c5'], 256, kernel_size=3, name='p5')
-        enriched_features = {'p5': p5}
-
-        p6 = conv2d_same(x, 256, kernel_size=3, stride=2, name='p6')
+        p5 = conv2d_same(x, 256, kernel_size=3, name='p5')
+        p6 = conv2d_same(features['c5'], 256, kernel_size=3, stride=2, name='p6')
         p7 = conv2d_same(tf.nn.relu(p6), 256, kernel_size=3, stride=2, name='p7')
-        enriched_features.update({'p6': p6, 'p7': p7})
+        enriched_features = {'p5': p5, 'p6': p6, 'p7': p7}
 
         # top-down path
         for i in reversed(range(min_level, 5)):
+            i = str(i)
             lateral = conv2d_same(features['c' + i], 256, kernel_size=1, name='lateral' + i)
             x = nearest_neighbor_upsample(x, scope='upsampling' + i) + lateral
             p = conv2d_same(x, 256, kernel_size=3, name='p' + i)

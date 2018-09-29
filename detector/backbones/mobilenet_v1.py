@@ -31,7 +31,7 @@ def mobilenet_v1(images, is_training, depth_multiplier=1.0):
         return x
 
     with tf.name_scope('standardize_input'):
-        x = (2.0*images) - 1.0
+        x = (2.0 * images) - 1.0
 
     with tf.variable_scope('MobilenetV1'):
         params = {

@@ -7,30 +7,35 @@ from detector.constants import EPSILON
 
 
 def random_image_crop(
-        image, boxes, labels, probability=0.1,
+        image_as_string, boxes, labels, probability=0.1,
         min_object_covered=0.9, aspect_ratio_range=(0.75, 1.33),
         area_range=(0.5, 1.0), overlap_thresh=0.3):
 
-    def crop(image, boxes, labels):
+    def crop(image_as_string, boxes, labels):
         image, boxes, keep_indices = randomly_crop_image(
-            image, boxes, min_object_covered,
+            image_as_string, boxes, min_object_covered,
             aspect_ratio_range,
             area_range, overlap_thresh
         )
         labels = tf.gather(labels, keep_indices)
         return image, boxes, labels
 
+    def just_decode(image_as_string):
+        image = tf.image.decode_jpeg(image_as_string, channels=3)
+        image = tf.image.convert_image_dtype(image, tf.float32)
+        return image
+
     do_it = tf.less(tf.random_uniform([]), probability)
     image, boxes, labels = tf.cond(
         do_it,
-        lambda: crop(image, boxes, labels),
-        lambda: (image, boxes, labels)
+        lambda: crop(image_as_string, boxes, labels),
+        lambda: (just_decode(image_as_string), boxes, labels)
     )
     return image, boxes, labels
 
 
 def randomly_crop_image(
-        image, boxes, min_object_covered=0.9,
+        image_as_string, boxes, min_object_covered=0.9,
         aspect_ratio_range=(0.75, 1.33), area_range=(0.5, 1.0),
         overlap_thresh=0.3):
     """Performs random crop. Given the input image and its bounding boxes,
@@ -41,8 +46,7 @@ def randomly_crop_image(
     form (e.g., lie in the unit square [0, 1]).
 
     Arguments:
-        image: a float tensor with shape [height, width, 3],
-            with pixel values varying between [0, 1].
+        image_as_string: a string tensor with shape [].
         boxes: a float tensor containing bounding boxes. It has shape
             [num_boxes, 4]. Boxes are in normalized form, meaning
             their coordinates vary between [0, 1].
@@ -55,7 +59,8 @@ def randomly_crop_image(
         overlap_thresh: minimum overlap thresh with new cropped
             image to keep the box.
     Returns:
-        image: cropped image.
+        image: cropped image, a float tensor with shape [None, None, 3],
+            with pixel values varying between [0, 1].
         boxes: remaining boxes.
         keep_indices: indices of remaining boxes in input boxes tensor.
             They are used to get a slice from the 'labels' tensor.
@@ -64,7 +69,7 @@ def randomly_crop_image(
     with tf.name_scope('random_crop_image'):
 
         sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
-            tf.shape(image),
+            tf.image.extract_jpeg_shape(image_as_string),
             bounding_boxes=tf.expand_dims(boxes, 0),
             min_object_covered=min_object_covered,
             aspect_ratio_range=aspect_ratio_range,
@@ -73,9 +78,11 @@ def randomly_crop_image(
             use_image_if_no_bounding_boxes=True
         )
         begin, size, window = sample_distorted_bounding_box
-        image = tf.slice(image, begin, size)
-        image.set_shape([None, None, 3])
         window = tf.squeeze(window, axis=[0, 1])
+
+        crop_window = tf.concat([begin[:2], size[:2]], axis=0)
+        image = tf.image.decode_and_crop_jpeg(image_as_string, crop_window, channels=3)
+        image = tf.image.convert_image_dtype(image, tf.float32)
 
         # remove boxes that are completely outside the cropped image
         boxes, inside_window_ids = prune_completely_outside_window(boxes, window)
@@ -96,6 +103,7 @@ def randomly_crop_image(
 def prune_completely_outside_window(boxes, window):
     """Prunes bounding boxes that fall completely outside of the given window.
     This function does not clip partially overflowing boxes.
+
     Arguments:
         boxes: a float tensor with shape [M_in, 4].
         window: a float tensor with shape [4] representing [ymin, xmin, ymax, xmax]

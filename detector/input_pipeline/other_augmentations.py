@@ -158,7 +158,7 @@ def random_black_patches(image, max_patches=10, probability=0.5, size_to_image_r
         image = tf.multiply(image, mask)
         return image
 
-    with tf.name_scope('random_colored_patches'):
+    with tf.name_scope('random_black_patches'):
         for _ in range(max_patches):
             do_it = tf.less(tf.random_uniform([]), probability)
             image = tf.cond(do_it, lambda: add_patch_to_image(image), lambda: image)

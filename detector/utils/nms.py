@@ -1,5 +1,6 @@
 import tensorflow as tf
 from detector.constants import PARALLEL_ITERATIONS
+from .box_utils import batch_decode
 
 
 def multiclass_non_max_suppression(
@@ -14,7 +15,7 @@ def multiclass_non_max_suppression(
         boxes: a float tensor with shape [N, num_classes, 4],
             normalized to [0, 1] range.
         scores: a float tensor with shape [N, num_classes].
-        score_thresh: a float number.
+        score_threshold: a float number.
         iou_threshold: a float number, threshold for IoU.
         max_boxes_per_class: an integer, maximum number of retained boxes per class.
     Returns:
@@ -22,7 +23,7 @@ def multiclass_non_max_suppression(
         selected_scores: a float tensor with shape [N'].
         selected_classes: an int tensor with shape [N'].
 
-        where 0 <= N' <= num_classes * max_boxes_per_class.
+        Where 0 <= N' <= num_classes * max_boxes_per_class.
     """
     boxes_list = tf.unstack(boxes, axis=1)
     scores_list = tf.unstack(scores, axis=1)
@@ -46,12 +47,14 @@ def multiclass_non_max_suppression(
 
 
 def batch_multiclass_non_max_suppression(
-        boxes, scores, score_threshold,
-        iou_threshold, max_boxes_per_class):
+        encoded_boxes, anchors, scores,
+        score_threshold, iou_threshold,
+        max_boxes_per_class):
     """Same as multiclass_non_max_suppression but for a batch of images.
 
     Arguments:
-        boxes: a float tensor with shape [batch_size, N, num_classes, 4].
+        encoded_boxes: a float tensor with shape [batch_size, N, num_classes, 4].
+        anchors: a float tensor with shape [N, 4].
         scores: a float tensor with shape [batch_size, N, num_classes].
     Returns:
         boxes: a float tensor with shape [batch_size, N', 4].
@@ -59,10 +62,20 @@ def batch_multiclass_non_max_suppression(
         classes: an int tensor with shape [batch_size, N'].
         num_detections: an int tensor with shape [batch_size].
 
-        N' = max_boxes_per_class * num_classes
+        Where N' = max_boxes_per_class * num_classes.
     """
     def fn(x):
-        boxes, scores = x
+        encoded_boxes, scores = x
+
+        is_confident = tf.reduce_max(scores, axis=1) >= score_threshold  # shape [N]
+        encoded_boxes = tf.boolean_mask(encoded_boxes, is_confident)  # shape [num_confident, num_classes, 4]
+        scores = tf.boolean_mask(scores, is_confident)  # shape [num_confident, num_classes]
+        chosen_anchors = tf.boolean_mask(anchors, is_confident)  # shape [num_confident, 4]
+
+        encoded_boxes = tf.transpose(encoded_boxes, [1, 0, 2])
+        boxes = batch_decode(encoded_boxes, chosen_anchors)
+        boxes = tf.transpose(boxes, [1, 0, 2])  # shape [num_confident, num_classes, 4]
+
         boxes, scores, classes = multiclass_non_max_suppression(
             boxes, scores, score_threshold,
             iou_threshold, max_boxes_per_class
@@ -81,7 +94,7 @@ def batch_multiclass_non_max_suppression(
         return boxes, scores, classes, num_boxes
 
     boxes, scores, classes, num_detections = tf.map_fn(
-        fn, [boxes, scores],
+        fn, [encoded_boxes, scores],
         dtype=(tf.float32, tf.float32, tf.int32, tf.int32),
         parallel_iterations=PARALLEL_ITERATIONS,
         back_prop=False, swap_memory=False, infer_shape=True

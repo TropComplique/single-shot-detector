@@ -68,9 +68,9 @@ class RetinaNetBoxPredictor(BoxPredictor):
         class_predictions = []
 
         """
-        The convolution layers in the class net are shared among all levels, but
+        The convolution layers in the box net are shared among all levels, but
         each level has its batch normalization to capture the statistical
-        difference among different levels. The same for the box net.
+        difference among different levels. The same for the class net.
         """
 
         with tf.variable_scope('box_net', reuse=tf.AUTO_REUSE):
@@ -125,7 +125,7 @@ def reshape_and_concatenate(
         encoded_boxes = tf.concat(encoded_boxes, axis=1)
         class_predictions = tf.concat(class_predictions, axis=1)
 
-    return encoded_boxes, class_predictions
+    return {'encoded_boxes': encoded_boxes, 'class_predictions': class_predictions}
 
 
 def class_net(x, is_training, level, num_classes, num_anchors_per_location):
@@ -139,7 +139,7 @@ def class_net(x, is_training, level, num_classes, num_anchors_per_location):
     """
 
     for i in range(4):
-        x = conv2d_same(x, 256, kernel_size=3)
+        x = conv2d_same(x, 256, kernel_size=3, name='conv3x3_%d' % i)
         x = batch_norm_relu(x, is_training, name='batch_norm_%d_for_level_%d' % (i, level))
 
     p = 0.01  # probability of foreground
@@ -148,7 +148,7 @@ def class_net(x, is_training, level, num_classes, num_anchors_per_location):
     logits = tf.layers.conv2d(
         x, num_classes * num_anchors_per_location,
         kernel_size=(3, 3), padding='same',
-        bias_initializer=tf.constant_initializer(-math.log((1 - p) / p)),
+        bias_initializer=tf.constant_initializer(-math.log((1.0 - p) / p)),
         kernel_initializer=tf.random_normal_initializer(stddev=0.01),
         data_format=DATA_FORMAT, name='logits'
     )
@@ -166,7 +166,7 @@ def box_net(x, is_training, level, num_anchors_per_location):
     """
 
     for i in range(4):
-        x = conv2d_same(x, 256, kernel_size=3)
+        x = conv2d_same(x, 256, kernel_size=3, name='conv3x3_%d' % i)
         x = batch_norm_relu(x, is_training, name='batch_norm_%d_for_level_%d' % (i, level))
 
     encoded_boxes = tf.layers.conv2d(

@@ -1,47 +1,59 @@
-import os
-import re
 import tensorflow as tf
 
-from src import SSD, AnchorGenerator, FeatureExtractor
-from src.backbones import mobilenet_v2_base
-from evaluation_utils import Evaluator
+from detector import SSD
+from detector.anchor_generator import AnchorGenerator
+from detector.box_predictor import SSDBoxPredictor, RetinaNetBoxPredictor
+from detector.feature_extractor import SSDFeatureExtractor, RetinaNetFeatureExtractor
+from detector.backbones import mobilenet_v1, shufflenet_v2
+from metrics import Evaluator
 
 
-def model_fn(features, labels, mode, params, config):
-    """This is a function for creating a computational tensorflow graph.
+def model_fn(features, labels, mode, params):
+    """
+    This is a function for creating a computational tensorflow graph.
     The function is in format required by tf.estimator.
     """
+    is_training = mode == tf.estimator.ModeKeys.TRAIN
 
     # the base network
     def backbone(images, is_training):
-        return mobilenet_v2_base(
+        return shufflenet_v2(
             images, is_training,
-            depth_multiplier=params['depth_multiplier']
+            depth_multiplier=str(params['depth_multiplier'])
         )
+
+    # add additional layers to the base network
+    feature_extractor = RetinaNetFeatureExtractor(is_training, backbone)
 
     # ssd anchor maker
     anchor_generator = AnchorGenerator(
-        scales=params['scales'],
-        min_scale=params['min_scale'],
-        max_scale=params['max_scale'],
-        aspect_ratios=params['aspect_ratios'],
-        interpolated_scale_aspect_ratio=params['interpolated_scale_aspect_ratio'],
-        reduce_boxes_in_lowest_layer=params['reduce_boxes_in_lowest_layer']
+        strides=[8, 16, 32, 64, 128],
+        scales=[32, 64, 128, 256, 512],
+        scale_multipliers=[1.0, 1.4142],
+        aspect_ratios=[1.0, 2.0, 0.5]
+    )
+    num_anchors_per_location = anchor_generator.num_anchors_per_location
+
+    # add layers that predict boxes and labels
+    box_predictor = RetinaNetBoxPredictor(is_training, num_classes, num_anchors_per_location)
+
+    # collect everything on one place
+    ssd = SSD(
+        features['images'], feature_extractor,
+        anchor_generator, box_predictor,
+        params['num_classes']
     )
 
-    # add additional layers to the base network
-    is_training = mode == tf.estimator.ModeKeys.TRAIN
-    feature_extractor = FeatureExtractor(backbone, is_training)
-
-    # add box/label predictors to the feature extractor
-    ssd = SSD(features['images'], feature_extractor, anchor_generator, params['num_classes'])
-
     # use a pretrained backbone network
-    if is_training and params['pretrained_checkpoint'] is not None:
+    if is_training:
         with tf.name_scope('init_from_checkpoint'):
-            tf.train.init_from_checkpoint(params['pretrained_checkpoint'], {'MobilenetV2/': 'MobilenetV2/'})
+            checkpoint_scope = 'ShuffleNetV2/'
+            tf.train.init_from_checkpoint(
+                params['pretrained_checkpoint'],
+                {checkpoint_scope: checkpoint_scope}
+            )
 
-    # add NMS to the graph
+    # add nms to the graph
     if not is_training:
         predictions = ssd.get_predictions(
             score_threshold=params['score_threshold'],
@@ -50,7 +62,6 @@ def model_fn(features, labels, mode, params, config):
         )
 
     if mode == tf.estimator.ModeKeys.PREDICT:
-        # this is required for exporting a savedmodel
         export_outputs = tf.estimator.export.PredictOutput({
             name: tf.identity(tensor, name)
             for name, tensor in predictions.items()
@@ -60,7 +71,7 @@ def model_fn(features, labels, mode, params, config):
             export_outputs={'outputs': export_outputs}
         )
 
-    # add L2 regularization
+    # add l2 regularization
     with tf.name_scope('weight_decay'):
         add_weight_decay(params['weight_decay'])
         regularization_loss = tf.losses.get_regularization_loss()
@@ -76,13 +87,11 @@ def model_fn(features, labels, mode, params, config):
 
     if mode == tf.estimator.ModeKeys.EVAL:
 
-        filenames = features['filenames']
-        batch_size = filenames.shape.as_list()[0]
+        batch_size = filenames.shape[0].value
         assert batch_size == 1
 
-        with tf.name_scope('evaluator'):
-            evaluator = Evaluator(num_classes=params['num_classes'])
-            eval_metric_ops = evaluator.get_metric_ops(filenames, labels, predictions)
+        evaluator = Evaluator(num_classes=params['num_classes'])
+        eval_metric_ops = evaluator.get_metric_ops(labels, predictions)
 
         return tf.estimator.EstimatorSpec(
             mode, loss=total_loss,
@@ -98,34 +107,18 @@ def model_fn(features, labels, mode, params, config):
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops), tf.variable_scope('optimizer'):
         optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=0.9, momentum=0.9, epsilon=1.0)
-
-        # you can freeze some variables
-        var_list = None
-        if params['freeze']:
-            trainable_var = tf.trainable_variables()
-            regexp = re.compile(params['freeze'])
-            var_list = [v for v in trainable_var if not bool(regexp.search(v.name))]
-
-        grads_and_vars = optimizer.compute_gradients(total_loss, var_list=var_list)
+        grads_and_vars = optimizer.compute_gradients(total_loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)
 
     for g, v in grads_and_vars:
         tf.summary.histogram(v.name[:-2] + '_hist', v)
         tf.summary.histogram(v.name[:-2] + '_grad_hist', g)
 
+    with tf.control_dependencies([train_op]), tf.name_scope('ema'):
+        ema = tf.train.ExponentialMovingAverage(decay=MOVING_AVERAGE_DECAY, num_updates=global_step)
+        train_op = ema.apply(tf.trainable_variables())
+
     return tf.estimator.EstimatorSpec(mode, loss=total_loss, train_op=train_op)
-
-
-class IteratorInitializerHook(tf.train.SessionRunHook):
-    """Hook to initialise data iterator after Session is created."""
-
-    def __init__(self):
-        super(IteratorInitializerHook, self).__init__()
-        self.iterator_initializer_func = None
-
-    def after_create_session(self, session, coord):
-        """Initialise the iterator after the session has been created."""
-        self.iterator_initializer_func(session)
 
 
 def add_weight_decay(weight_decay):
@@ -139,3 +132,20 @@ def add_weight_decay(weight_decay):
     for K in kernels:
         x = tf.multiply(weight_decay, tf.nn.l2_loss(K))
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, x)
+
+
+class RestoreMovingAverageHook(tf.train.SessionRunHook):
+    def __init__(self, model_dir):
+        super(RestoreMovingAverageHook, self).__init__()
+        self.model_dir = model_dir
+
+    def begin(self):
+        ema = tf.train.ExponentialMovingAverage(decay=MOVING_AVERAGE_DECAY)
+        variables_to_restore = ema.variables_to_restore()
+        self.load_ema = tf.contrib.framework.assign_from_checkpoint_fn(
+            tf.train.latest_checkpoint(self.model_dir), variables_to_restore
+        )
+
+    def after_create_session(self, sess, coord):
+        tf.logging.info('Loading EMA weights...')
+        self.load_ema(sess)

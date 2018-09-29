@@ -16,55 +16,61 @@ def localization_loss(predictions, targets, weights):
     """
     abs_diff = tf.abs(predictions - targets)
     abs_diff_lt_1 = tf.less(abs_diff, 1.0)
-    return weights * tf.reduce_sum(
-        tf.where(abs_diff_lt_1, 0.5 * tf.square(abs_diff), abs_diff - 0.5), axis=2
-    )
+    loss = tf.where(abs_diff_lt_1, 0.5 * tf.square(abs_diff), abs_diff - 0.5)
+    return weights * tf.reduce_sum(loss, axis=2)
 
 
-def classification_loss(predictions, targets):
+def usual_classification_loss(predictions, targets, weights):
     """
     Arguments:
         predictions: a float tensor with shape [batch_size, num_anchors, num_classes],
             representing the predicted logits for each class.
         targets: a float tensor with shape [batch_size, num_anchors, num_classes],
             representing one-hot encoded classification targets.
+        weights: a float tensor with shape [batch_size, num_anchors].
     Returns:
         a float tensor with shape [batch_size, num_anchors].
     """
     cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=targets, logits=predictions
     )
-    return tf.reduce_sum(cross_entropy, axis=2)
+    return weights * tf.reduce_sum(cross_entropy, axis=2)
 
 
-def focal_loss(predictions, targets, gamma=2.0, alpha=0.25):
+def focal_loss(predictions, targets, weights, gamma=2.0, alpha=0.25):
     """
     Arguments:
         predictions: a float tensor with shape [batch_size, num_anchors, num_classes],
             representing the predicted logits for each class.
         targets: a float tensor with shape [batch_size, num_anchors, num_classes],
             representing one-hot encoded classification targets.
+        weights: a float tensor with shape [batch_size, num_anchors].
+        gamma, alpha: float numbers.
     Returns:
         a float tensor with shape [batch_size, num_anchors].
     """
+    positive_label_mask = tf.equal(targets, 1.0)
 
     negative_log_p_t = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets, logits=predictions)
     probabilities = tf.sigmoid(predictions)
-    p_t = targets * probabilities + (1.0 - targets) * (1.0 - probabilities)
+    p_t = tf.where(positive_label_mask, probabilities, 1.0 - probabilities)
     # they all have shape [batch_size, num_anchors, num_classes]
 
     modulating_factor = tf.pow(1.0 - p_t, gamma)
-    alpha_t = targets * alpha + (1.0 - targets) * (1.0 - alpha)
-    focal_loss = alpha_t * modulating_factor * negative_log_p_t
+    weighted_loss = tf.where(
+        positive_label_mask,
+        alpha * negative_log_p_t,
+        (1.0 - alpha) * negative_log_p_t
+    )
+    focal_loss = modulating_factor * weighted_loss
     # they all have shape [batch_size, num_anchors, num_classes]
 
-    return tf.reduce_sum(focal_loss, axis=2)
+    return weights * tf.reduce_sum(focal_loss, axis=2)
 
 
 def apply_hard_mining(
         loc_losses, cls_losses,
-        encoded_boxes, class_predictions,
-        matches, anchors,
+        encoded_boxes, matches, anchors,
         loss_to_use='classification',
         loc_loss_weight=1.0, cls_loss_weight=1.0,
         num_hard_examples=3000, nms_threshold=0.99,
@@ -76,7 +82,6 @@ def apply_hard_mining(
         loc_losses: a float tensor with shape [batch_size, num_anchors].
         cls_losses: a float tensor with shape [batch_size, num_anchors].
         encoded_boxes: a float tensor with shape [batch_size, num_anchors, 4].
-        class_predictions: a float tensor with shape [batch_size, num_anchors, num_classes].
         matches: an int tensor with shape [batch_size, num_anchors].
         anchors: a float tensor with shape [num_anchors, 4].
         loss_to_use: a string, only possible values are ['classification', 'both'].
