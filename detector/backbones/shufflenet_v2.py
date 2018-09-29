@@ -47,8 +47,12 @@ def shufflenet_v2(images, is_training, depth_multiplier='1.0'):
                 x = tf.transpose(x, [0, 3, 1, 2])
 
             x = slim.conv2d(x, 24, (3, 3), stride=2, scope='Conv1')
-            x = slim.max_pool2d(x, (3, 3), stride=2, padding='SAME', scope='MaxPool')
-
+            x = slim.max_pool2d(
+                x, (3, 3), stride=2, padding='SAME', 
+                data_format='NCHW' if DATA_FORMAT == 'channels_first' else 'NHWC',
+                scope='MaxPool'
+            )
+       
             stage_name = 'Stage2'
             x = block(x, num_units=4, out_channels=initial_depth, scope=stage_name)
             features[stage_name] = x  # stride 8

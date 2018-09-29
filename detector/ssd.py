@@ -102,7 +102,7 @@ class SSD:
 
                 not_ignore = tf.to_float(tf.greater_equal(matches, -1))
                 # if a value is `-2` then we ignore its anchor
-
+                
                 if params['use_focal_loss']:
                     cls_losses = focal_loss(
                         class_predictions, cls_targets, weights=not_ignore,
@@ -168,7 +168,7 @@ class SSD:
         """
         index = 0
         for i, n in enumerate(self.num_anchors_per_feature_map):
-            k = tf.to_int32(tf.ceil(n * 0.20))  # top 20%
+            k = tf.to_int32(tf.ceil(tf.to_float(n) * 0.20))  # top 20%
             biggest_values, _ = tf.nn.top_k(tensor[:, index:(index + n)], k, sorted=False)
             # it has shape [batch_size, k]
             tf.summary.histogram(

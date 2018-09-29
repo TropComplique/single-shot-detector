@@ -20,6 +20,8 @@ class Pipeline:
             is_training: a boolean.
             params: a dict.
         """
+        self.is_training = is_training
+
         if not is_training:
             batch_size = 1
             self.image_size = [None, None]
@@ -46,18 +48,18 @@ class Pipeline:
         dataset = tf.data.Dataset.from_tensor_slices(filenames)
         num_shards = len(filenames)
 
-        if shuffle:
+        if is_training:
             dataset = dataset.shuffle(buffer_size=num_shards)
 
         dataset = dataset.flat_map(tf.data.TFRecordDataset)
         dataset = dataset.prefetch(buffer_size=batch_size)
 
-        if shuffle:
+        if is_training:
             dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
         dataset = dataset.repeat(None if is_training else 1)
         dataset = dataset.map(self._parse_and_preprocess, num_parallel_calls=NUM_PARALLEL_CALLS)
 
-        padded_shapes = (self.image_size + [3], [None, 4], [None], [])
+        padded_shapes = ({'images': self.image_size + [3]}, {'boxes': [None, 4], 'labels': [None], 'num_boxes': []})
         dataset = dataset.padded_batch(batch_size, padded_shapes, drop_remainder=True)
         dataset = dataset.prefetch(buffer_size=1)
 
@@ -160,7 +162,7 @@ def resize_keeping_aspect_ratio(image, min_dimension, divisor):
     scale_factor = tf.to_float(min_dimension / original_min_dim)
 
     def scale(x):
-        x = tf.to_int32(tf.ceil(x * scale_factor / divisor))
+        x = tf.to_int32(tf.ceil(tf.to_float(x) * scale_factor / tf.to_float(divisor)))
         return divisor * x
 
     new_height, new_width = tf.cond(

@@ -7,15 +7,15 @@ from detector.input_pipeline import Pipeline
 tf.logging.set_verbosity('INFO')
 
 
-GPU_TO_USE = '0'
+GPU_TO_USE = '1'
 
 # CONFIG = 'config.json'
 # params = json.load(open(CONFIG))
 
 params = {
     "model_dir": "models/run00",
-    "train_dataset": "/mnt/datasets/COCO/train_shards/",
-    "val_dataset": "/mnt/datasets/COCO/val_shards/",
+    "train_dataset": "/home/dan/datasets/COCO/coco_person/train_shards/",
+    "val_dataset": "/home/dan/datasets/COCO/coco_person/val_shards/",
 
     "backbone": "shufflenet",  # 'mobilenet' or 'shufflenet'
     "depth_multiplier": 1.0,
@@ -41,7 +41,7 @@ params = {
     "lr_values": [0.009, 0.005, 0.001, 0.0005, 0.0001],
 
     "min_dimension": 768,
-    "batch_size": 16,
+    "batch_size": 14,
     "image_height": 640,
     "image_width": 640,
 

@@ -1,4 +1,5 @@
 import tensorflow as tf
+import itertools
 
 
 """
@@ -33,6 +34,7 @@ class AnchorGenerator:
         self.scales = scales
         self.scale_multipliers = scale_multipliers
         self.aspect_ratios = aspect_ratios
+        self.num_anchors_per_location = len(aspect_ratios) * len(scale_multipliers)
 
     def __call__(self, image_height, image_width):
         """
@@ -45,8 +47,6 @@ class AnchorGenerator:
             a float tensor with shape [num_anchors, 4],
             boxes with normalized coordinates (and clipped to the unit square).
         """
-        num_anchors_per_location = len(self.aspect_ratios) * len(self.scale_multipliers)
-
         image_height = tf.to_float(image_height)
         image_width = tf.to_float(image_width)
 
@@ -56,10 +56,9 @@ class AnchorGenerator:
             h = tf.to_int32(tf.ceil(image_height/stride))
             w = tf.to_int32(tf.ceil(image_width/stride))
             feature_map_info.append((stride, h, w))
-            num_anchors_per_feature_map.append(h * w * num_anchors_per_location)
+            num_anchors_per_feature_map.append(h * w * self.num_anchors_per_location)
 
         # these are needed elsewhere
-        self.num_anchors_per_location = num_anchors_per_location
         self.num_anchors_per_feature_map = num_anchors_per_feature_map
 
         with tf.name_scope('anchor_generator'):

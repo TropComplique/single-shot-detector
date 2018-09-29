@@ -154,7 +154,7 @@ def batch_decode(box_encodings, anchors):
     with tf.name_scope('batch_decode'):
 
         # batch size is a dynamic value
-        batch_size = tf shape(box_encodings)[0]
+        batch_size = tf.shape(box_encodings)[0]
 
         # number of anchors depends on the image size (it is a dynamic value)
         num_anchors = tf.shape(anchors)[0]

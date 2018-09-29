@@ -8,6 +8,9 @@ from detector.backbones import mobilenet_v1, shufflenet_v2
 from metrics import Evaluator
 
 
+MOVING_AVERAGE_DECAY = 0.993
+
+
 def model_fn(features, labels, mode, params):
     """
     This is a function for creating a computational tensorflow graph.
@@ -35,7 +38,7 @@ def model_fn(features, labels, mode, params):
     num_anchors_per_location = anchor_generator.num_anchors_per_location
 
     # add layers that predict boxes and labels
-    box_predictor = RetinaNetBoxPredictor(is_training, num_classes, num_anchors_per_location)
+    box_predictor = RetinaNetBoxPredictor(is_training, params['num_classes'], num_anchors_per_location)
 
     # collect everything on one place
     ssd = SSD(

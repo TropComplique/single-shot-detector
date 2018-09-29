@@ -142,8 +142,8 @@ def random_black_patches(image, max_patches=10, probability=0.5, size_to_image_r
         a float tensor with shape [height, width, 3].
     """
     def add_patch_to_image(image):
-        image_height = tf.shape(image)[1]
-        image_width = tf.shape(image)[2]
+        image_height = tf.shape(image)[0]
+        image_width = tf.shape(image)[1]
         box_size = tf.to_int32(tf.multiply(
             tf.minimum(tf.to_float(image_height), tf.to_float(image_width)),
             size_to_image_ratio

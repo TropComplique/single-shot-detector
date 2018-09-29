@@ -48,9 +48,7 @@ class RetinaNetFeatureExtractor(FeatureExtractor):
         features = self.backbone(images, self.is_training)
         enriched_features = fpn(
             features, self.is_training,
-            min_level=MIN_LEVEL,
-            add_coarse_features=True,
-            scope='fpn'
+            min_level=MIN_LEVEL, scope='fpn'
         )
         return [enriched_features['p' + str(i)] for i in range(MIN_LEVEL, 8)]
 

@@ -76,14 +76,14 @@ class RetinaNetBoxPredictor(BoxPredictor):
         with tf.variable_scope('box_net', reuse=tf.AUTO_REUSE):
             for level, p in enumerate(image_features, MIN_LEVEL):
                 encoded_boxes.append(box_net(
-                    p, is_training, level,
+                    p, self.is_training, level, self.num_classes,
                     self.num_anchors_per_location
                 ))
 
         with tf.variable_scope('class_net', reuse=tf.AUTO_REUSE):
             for level, p in enumerate(image_features, MIN_LEVEL):
                 class_predictions.append(class_net(
-                    p, is_training, level, self.num_classes,
+                    p, self.is_training, level, self.num_classes,
                     self.num_anchors_per_location
                 ))
 
@@ -114,12 +114,12 @@ def reshape_and_concatenate(
 
             y = encoded_boxes[i]
             y = tf.transpose(y, perm=[0, 2, 3, 1]) if DATA_FORMAT == 'channels_first' else y
-            y = tf.reshape(y, [batch_size, height_i, width_i, num_predictions_per_location, num_classes, 4])
+            y = tf.reshape(y, [batch_size, height_i, width_i, num_anchors_per_location, num_classes, 4])
             encoded_boxes[i] = tf.reshape(y, [batch_size, num_anchors_on_feature_map, num_classes, 4])
 
             y = class_predictions[i]
             y = tf.transpose(y, perm=[0, 2, 3, 1]) if DATA_FORMAT == 'channels_first' else y
-            y = tf.reshape(y, [batch_size, height_i, width_i, num_predictions_per_location, num_classes])
+            y = tf.reshape(y, [batch_size, height_i, width_i, num_anchors_per_location, num_classes])
             class_predictions[i] = tf.reshape(y, [batch_size, num_anchors_on_feature_map, num_classes])
 
         encoded_boxes = tf.concat(encoded_boxes, axis=1)
@@ -155,14 +155,14 @@ def class_net(x, is_training, level, num_classes, num_anchors_per_location):
     return logits
 
 
-def box_net(x, is_training, level, num_anchors_per_location):
+def box_net(x, is_training, level, num_classes, num_anchors_per_location):
     """
     Arguments:
         x: a float tensor with shape [batch_size, depth, height, width].
         is_training: a boolean.
-        level, num_anchors_per_location: integers.
+        level, num_classes, num_anchors_per_location: integers.
     Returns:
-        a float tensor with shape [batch_size, 4 * num_anchors_per_location, height, width].
+        a float tensor with shape [batch_size, 4 * num_classes * num_anchors_per_location, height, width].
     """
 
     for i in range(4):
@@ -170,7 +170,7 @@ def box_net(x, is_training, level, num_anchors_per_location):
         x = batch_norm_relu(x, is_training, name='batch_norm_%d_for_level_%d' % (i, level))
 
     encoded_boxes = tf.layers.conv2d(
-        x, 4 * num_anchors_per_location,
+        x, 4 * num_classes * num_anchors_per_location,
         kernel_size=(3, 3), padding='same',
         bias_initializer=tf.zeros_initializer(),
         kernel_initializer=tf.random_normal_initializer(stddev=0.01),

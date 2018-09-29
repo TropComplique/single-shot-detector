@@ -4,7 +4,9 @@ import tensorflow as tf
 MIN_LEVEL = 3
 # the minimal feature stride that will be used is `2**MIN_LEVEL`
 
-DIVISOR
+DIVISOR = 128
+
+DATA_FORMAT = 'channels_first'
 
 # a small value
 EPSILON = 1e-8
