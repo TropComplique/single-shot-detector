@@ -5,6 +5,9 @@ from .constants import DATA_FORMAT, MIN_LEVEL
 from .utils import batch_norm_relu, conv2d_same
 
 
+BOX_PREDICTOR_DEPTH = 256
+
+
 class BoxPredictor(ABC):
 
     def __init__(self, is_training, num_classes, num_anchors_per_location):
@@ -139,7 +142,7 @@ def class_net(x, is_training, level, num_classes, num_anchors_per_location):
     """
 
     for i in range(4):
-        x = conv2d_same(x, 256, kernel_size=3, name='conv3x3_%d' % i)
+        x = conv2d_same(x, BOX_PREDICTOR_DEPTH, kernel_size=3, name='conv3x3_%d' % i)
         x = batch_norm_relu(x, is_training, name='batch_norm_%d_for_level_%d' % (i, level))
 
     p = 0.01  # probability of foreground
@@ -166,7 +169,7 @@ def box_net(x, is_training, level, num_classes, num_anchors_per_location):
     """
 
     for i in range(4):
-        x = conv2d_same(x, 256, kernel_size=3, name='conv3x3_%d' % i)
+        x = conv2d_same(x, BOX_PREDICTOR_DEPTH, kernel_size=3, name='conv3x3_%d' % i)
         x = batch_norm_relu(x, is_training, name='batch_norm_%d_for_level_%d' % (i, level))
 
     encoded_boxes = tf.layers.conv2d(

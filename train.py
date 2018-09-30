@@ -19,8 +19,8 @@ params = {
 
     "backbone": "shufflenet",  # 'mobilenet' or 'shufflenet'
     "depth_multiplier": 1.0,
-    "weight_decay": 1e-4,
-    "num_classes": 80,
+    "weight_decay": 1e-5,
+    "num_classes": 1,
 
     "pretrained_checkpoint": "pretrained/shufflenet_v2_1.0x/model.ckpt-1661328",
 
@@ -32,20 +32,20 @@ params = {
     "alpha": 0.25,
 
     "use_ohem": False,
-    "loss_to_use": "classification",
-    "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
-    "num_hard_examples": 3000, "nms_threshold": 0.99,
-    "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
+    # "loss_to_use": "classification",
+    # "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
+    # "num_hard_examples": 3000, "nms_threshold": 0.99,
+    # "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
 
-    "lr_boundaries": [60000, 120000, 150000, 170000],
-    "lr_values": [0.009, 0.005, 0.001, 0.0005, 0.0001],
+    "lr_boundaries": [40000, 50000],
+    "lr_values": [0.01, 0.001, 0.00001],
 
     "min_dimension": 768,
     "batch_size": 14,
     "image_height": 640,
     "image_width": 640,
 
-    "num_steps": 180000,
+    "num_steps": 60000,
 }
 
 

@@ -4,6 +4,9 @@ from .constants import DATA_FORMAT, MIN_LEVEL
 from .utils import batch_norm_relu, conv2d_same
 
 
+FPN_DEPTH = 256
+
+
 class FeatureExtractor(ABC):
 
     def __init__(self, is_training, backbone):
@@ -70,18 +73,18 @@ def fpn(features, is_training, min_level=3, scope='fpn'):
 
     with tf.variable_scope(scope):
 
-        x = conv2d_same(features['c5'], 256, kernel_size=1, name='lateral5')
-        p5 = conv2d_same(x, 256, kernel_size=3, name='p5')
-        p6 = conv2d_same(features['c5'], 256, kernel_size=3, stride=2, name='p6')
-        p7 = conv2d_same(tf.nn.relu(p6), 256, kernel_size=3, stride=2, name='p7')
+        x = conv2d_same(features['c5'], FPN_DEPTH, kernel_size=1, name='lateral5')
+        p5 = conv2d_same(x, FPN_DEPTH, kernel_size=3, name='p5')
+        p6 = conv2d_same(features['c5'], FPN_DEPTH, kernel_size=3, stride=2, name='p6')
+        p7 = conv2d_same(tf.nn.relu(p6), FPN_DEPTH, kernel_size=3, stride=2, name='p7')
         enriched_features = {'p5': p5, 'p6': p6, 'p7': p7}
 
         # top-down path
         for i in reversed(range(min_level, 5)):
             i = str(i)
-            lateral = conv2d_same(features['c' + i], 256, kernel_size=1, name='lateral' + i)
+            lateral = conv2d_same(features['c' + i], FPN_DEPTH, kernel_size=1, name='lateral' + i)
             x = nearest_neighbor_upsample(x, scope='upsampling' + i) + lateral
-            p = conv2d_same(x, 256, kernel_size=3, name='p' + i)
+            p = conv2d_same(x, FPN_DEPTH, kernel_size=3, name='p' + i)
             enriched_features['p' + i] = p
 
         enriched_features = {

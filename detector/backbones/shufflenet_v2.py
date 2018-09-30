@@ -17,6 +17,8 @@ def shufflenet_v2(images, is_training, depth_multiplier='1.0'):
     Returns:
         a dict with float tensors.
     """
+    data_format = 'NCHW' if DATA_FORMAT == 'channels_first' else 'NHWC'
+
     possibilities = {'0.5': 48, '1.0': 116, '1.5': 176, '2.0': 224}
     initial_depth = possibilities[depth_multiplier]
 
@@ -36,9 +38,8 @@ def shufflenet_v2(images, is_training, depth_multiplier='1.0'):
 
     with tf.variable_scope('ShuffleNetV2'):
         params = {
-            'padding': 'SAME',
-            'activation_fn': tf.nn.relu, 'normalizer_fn': batch_norm,
-            'data_format': 'NCHW' if DATA_FORMAT == 'channels_first' else 'NHWC'
+            'padding': 'SAME', 'activation_fn': tf.nn.relu,
+            'normalizer_fn': batch_norm, 'data_format': data_format
         }
         with slim.arg_scope([slim.conv2d, depthwise_conv], **params):
             features = {}
@@ -48,11 +49,10 @@ def shufflenet_v2(images, is_training, depth_multiplier='1.0'):
 
             x = slim.conv2d(x, 24, (3, 3), stride=2, scope='Conv1')
             x = slim.max_pool2d(
-                x, (3, 3), stride=2, padding='SAME', 
-                data_format='NCHW' if DATA_FORMAT == 'channels_first' else 'NHWC',
-                scope='MaxPool'
+                x, (3, 3), stride=2, padding='SAME',
+                data_format=data_format, scope='MaxPool'
             )
-       
+
             stage_name = 'Stage2'
             x = block(x, num_units=4, out_channels=initial_depth, scope=stage_name)
             features[stage_name] = x  # stride 8

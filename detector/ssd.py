@@ -102,7 +102,7 @@ class SSD:
 
                 not_ignore = tf.to_float(tf.greater_equal(matches, -1))
                 # if a value is `-2` then we ignore its anchor
-                
+
                 if params['use_focal_loss']:
                     cls_losses = focal_loss(
                         class_predictions, cls_targets, weights=not_ignore,

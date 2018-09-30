@@ -4,8 +4,7 @@ from detector.constants import SHUFFLE_BUFFER_SIZE,\
     NUM_PARALLEL_CALLS, RESIZE_METHOD, DIVISOR
 from .random_image_crop import random_image_crop
 from .other_augmentations import random_color_manipulations,\
-    random_flip_left_right, random_pixel_value_scale, random_jitter_boxes,\
-    random_black_patches
+    random_flip_left_right, random_pixel_value_scale, random_jitter_boxes
 
 
 class Pipeline:
@@ -120,7 +119,7 @@ class Pipeline:
         # you will need to tune them all, haha
 
         image, boxes, labels = random_image_crop(
-            image_as_string, boxes, labels, probability=0.7,
+            image_as_string, boxes, labels, probability=0.9,
             min_object_covered=0.9,
             aspect_ratio_range=(0.9, 1.1),
             area_range=(0.333, 0.9),
@@ -131,7 +130,6 @@ class Pipeline:
         image = random_color_manipulations(image, probability=0.25, grayscale_probability=0.05)
         image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.2)
         boxes = random_jitter_boxes(boxes, ratio=0.01)
-        image = random_black_patches(image, max_patches=10, probability=0.2, size_to_image_ratio=0.1)
         image, boxes = random_flip_left_right(image, boxes)
         return image, boxes, labels
 
@@ -162,18 +160,26 @@ def resize_keeping_aspect_ratio(image, min_dimension, divisor):
     scale_factor = tf.to_float(min_dimension / original_min_dim)
 
     def scale(x):
-        x = tf.to_int32(tf.ceil(tf.to_float(x) * scale_factor / tf.to_float(divisor)))
-        return divisor * x
+        unpadded_x = tf.to_int32(tf.round(tf.to_float(x) * scale_factor))
+        x = tf.to_int32(tf.ceil(unpadded_x / divisor))
+        pad = divisor * x - unpadded_x
+        return (unpadded_x, pad)
 
-    new_height, new_width = tf.cond(
+    zero = tf.constant(0, dtype=tf.int32)
+    new_height, pad_height, new_width, pad_width = tf.cond(
         tf.greater_equal(height, width),
-        lambda: (scale(height), min_dimension),
-        lambda: (min_dimension, scale(width))
+        lambda: scale(height) + (min_dimension, zero),
+        lambda: (min_dimension, zero) + scale(width)
     )
 
-    image = tf.image.resize_image_with_pad(
-        image, new_height, new_width,
-        method=RESIZE_METHOD
+    # resize keeping aspect ratio
+    image = tf.image.resize_images(image, [new_height, new_width], method=RESIZE_METHOD)
+
+    new_height += pad_height
+    new_width += pad_width
+    image = tf.image.pad_to_bounding_box(
+        image, offset_height=0, offset_width=0,
+        target_height=new_height, target_width=new_width
     )
     # it pads image at the bottom or at the right
 

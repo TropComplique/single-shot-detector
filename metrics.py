@@ -48,9 +48,10 @@ class Evaluator:
                 'boxes': a float tensor with shape [1, N, 4].
                 'labels': an int tensor with shape [1, N].
             predictions: a dict with the following keys
-                'boxes': a float tensor with shape [M, 4].
-                'labels': an int tensor with shape [M].
-                'scores': a float tensor with shape [M].
+                'boxes': a float tensor with shape [1, M, 4].
+                'labels': an int tensor with shape [1, M].
+                'scores': a float tensor with shape [1, M].
+                'num_boxes': a float tensor with shape [1].
         """
 
         def update_op_func(gt_boxes, gt_labels, boxes, labels, scores):
@@ -59,9 +60,12 @@ class Evaluator:
             self.add_groundtruth(image_name, gt_boxes, gt_labels)
             self.add_detections(image_name, boxes, labels, scores)
 
+        num_boxes = predictions['num_boxes'][0]
         tensors = [
             groundtruth['boxes'][0], groundtruth['labels'][0],
-            predictions['boxes'], predictions['labels'], predictions['scores']
+            predictions['boxes'][0][:num_boxes],
+            predictions['labels'][0][:num_boxes],
+            predictions['scores'][0][:num_boxes]
         ]
         update_op = tf.py_func(update_op_func, tensors, [])
 
