@@ -175,18 +175,19 @@ def resize_keeping_aspect_ratio(image, min_dimension, divisor):
     # resize keeping aspect ratio
     image = tf.image.resize_images(image, [new_height, new_width], method=RESIZE_METHOD)
 
-    new_height += pad_height
-    new_width += pad_width
     image = tf.image.pad_to_bounding_box(
         image, offset_height=0, offset_width=0,
-        target_height=new_height, target_width=new_width
+        target_height=new_height + pad_height,
+        target_width=new_width + pad_width
     )
     # it pads image at the bottom or at the right
 
     # we need to rescale bounding box coordinates
     box_scaler = tf.to_float(tf.stack([
-        height/new_height, width/new_width,
-        height/new_height, width/new_width
+        new_height/(new_height + pad_height),
+        new_width/(new_width + pad_width),
+        new_height/(new_height + pad_height),
+        new_width/(new_width + pad_width),
     ]))
 
     return image, box_scaler
