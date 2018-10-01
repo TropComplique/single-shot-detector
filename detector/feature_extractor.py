@@ -88,7 +88,7 @@ def fpn(features, is_training, min_level=3, scope='fpn'):
             enriched_features['p' + i] = p
 
         enriched_features = {
-            n: batch_norm_relu(x, is_training, use_relu=False, name=n)
+            n: batch_norm_relu(x, is_training, use_relu=False, name=n + '_batch_norm')
             for n, x in enriched_features.items()
         }
 

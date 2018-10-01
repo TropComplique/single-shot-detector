@@ -47,21 +47,22 @@ class AnchorGenerator:
             a float tensor with shape [num_anchors, 4],
             boxes with normalized coordinates (and clipped to the unit square).
         """
-        image_height = tf.to_float(image_height)
-        image_width = tf.to_float(image_width)
-
-        feature_map_info = []
-        num_anchors_per_feature_map = []
-        for stride in self.strides:
-            h = tf.to_int32(tf.ceil(image_height/stride))
-            w = tf.to_int32(tf.ceil(image_width/stride))
-            feature_map_info.append((stride, h, w))
-            num_anchors_per_feature_map.append(h * w * self.num_anchors_per_location)
-
-        # these are needed elsewhere
-        self.num_anchors_per_feature_map = num_anchors_per_feature_map
-
         with tf.name_scope('anchor_generator'):
+
+            image_height = tf.to_float(image_height)
+            image_width = tf.to_float(image_width)
+
+            feature_map_info = []
+            num_anchors_per_feature_map = []
+            for stride in self.strides:
+                h = tf.to_int32(tf.ceil(image_height/stride))
+                w = tf.to_int32(tf.ceil(image_width/stride))
+                feature_map_info.append((stride, h, w))
+                num_anchors_per_feature_map.append(h * w * self.num_anchors_per_location)
+
+            # these are needed elsewhere
+            self.num_anchors_per_feature_map = num_anchors_per_feature_map
+
             anchors = []
 
             # this is shared by all feature maps

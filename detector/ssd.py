@@ -63,8 +63,8 @@ class SSD:
         with tf.name_scope('nms'):
             boxes, scores, classes, num_detections = batch_multiclass_non_max_suppression(
                 encoded_boxes, self.anchors, scores,
-                score_threshold, iou_threshold,
-                max_boxes_per_class
+                score_threshold=score_threshold, iou_threshold=iou_threshold,
+                max_boxes_per_class=max_boxes_per_class
             )
         return {'boxes': boxes, 'labels': classes, 'scores': scores, 'num_boxes': num_detections}
 
@@ -134,10 +134,11 @@ class SSD:
                 num_matches = tf.reduce_sum(matches_per_image)  # shape []
                 normalizer = tf.maximum(num_matches, 1.0)
 
-            self._add_scalewise_matches_summaries(weights)
-            self._add_scalewise_summaries(cls_losses, name='classification_losses')
-            self._add_scalewise_summaries(loc_losses, name='localization_losses')
-            tf.summary.scalar('total_mean_matches_per_image', tf.reduce_mean(matches_per_image))
+            with tf.name_scope('loss_summaries'):
+                self._add_scalewise_matches_summaries(weights)
+                self._add_scalewise_summaries(cls_losses, name='classification_losses')
+                self._add_scalewise_summaries(loc_losses, name='localization_losses')
+                tf.summary.scalar('total_mean_matches_per_image', tf.reduce_mean(matches_per_image))
 
             if params['use_ohem']:
                 with tf.name_scope('ohem'):
