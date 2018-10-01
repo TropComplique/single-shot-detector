@@ -5,7 +5,7 @@ from .constants import DATA_FORMAT, MIN_LEVEL
 from .utils import batch_norm_relu, conv2d_same
 
 
-BOX_PREDICTOR_DEPTH = 256
+BOX_PREDICTOR_DEPTH = 64
 
 
 class BoxPredictor(ABC):
@@ -99,14 +99,19 @@ class RetinaNetBoxPredictor(BoxPredictor):
 def reshape_and_concatenate(
         encoded_boxes, class_predictions,
         num_classes, num_anchors_per_location):
-
+    
+    # batch size is a static value 
+    # during training and evaluation
+    batch_size = encoded_boxes[0].shape[0].value
+    if batch_size is None:
+        batch_size = tf.shape(encoded_boxes[0])[0]
+                
     # it is important that reshaping here is the same as when anchors were generated
     with tf.name_scope('reshaping_and_concatenation'):
         for i in range(len(encoded_boxes)):
 
-            # get batch size and spatial dimensions
+            # get spatial dimensions
             shape = tf.shape(encoded_boxes[i])
-            batch_size = shape[0]
             if DATA_FORMAT == 'channels_first':
                 height_i, width_i = shape[2], shape[3]
             else:

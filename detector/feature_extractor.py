@@ -4,7 +4,7 @@ from .constants import DATA_FORMAT, MIN_LEVEL
 from .utils import batch_norm_relu, conv2d_same
 
 
-FPN_DEPTH = 256
+FPN_DEPTH = 64
 
 
 class FeatureExtractor(ABC):
@@ -99,7 +99,9 @@ def nearest_neighbor_upsample(x, rate=2, scope='upsampling'):
     with tf.name_scope(scope):
 
         shape = tf.shape(x)
-        batch_size = shape[0]
+        batch_size = x.shape[0].value
+        if batch_size is None:
+            batch_size = shape[0]
 
         if DATA_FORMAT == 'channels_first':
             channels = x.shape[1].value

@@ -95,7 +95,9 @@ def concat_shuffle_split(x, y):
     with tf.name_scope('concat_shuffle_split'):
 
         shape = tf.shape(x)
-        batch_size = shape[0]
+        batch_size = x.shape[0].value
+        if batch_size is None:
+            batch_size = shape[0]
 
         if DATA_FORMAT == 'channels_first':
             depth, height, width = x.shape[1].value, shape[2], shape[3]

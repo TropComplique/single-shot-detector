@@ -90,7 +90,7 @@ def model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.EVAL:
 
-        batch_size = filenames.shape[0].value
+        batch_size = features['images'].shape[0].value
         assert batch_size == 1
 
         evaluator = Evaluator(num_classes=params['num_classes'])
