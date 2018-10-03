@@ -144,7 +144,7 @@ class SSD:
                 with tf.name_scope('ohem'):
                     loc_loss, cls_loss = apply_hard_mining(
                         loc_losses, cls_losses,
-                        encoded_boxes, matches, anchors,
+                        encoded_boxes, matches, self.anchors,
                         loss_to_use=params['loss_to_use'],
                         loc_loss_weight=params['loc_loss_weight'],
                         cls_loss_weight=params['cls_loss_weight'],

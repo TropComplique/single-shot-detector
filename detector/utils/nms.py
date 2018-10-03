@@ -96,11 +96,13 @@ def batch_multiclass_non_max_suppression(
         scores.set_shape([max_detections])
         classes.set_shape([max_detections])
         return boxes, scores, classes, num_boxes
-
+    
+    
     boxes, scores, classes, num_detections = tf.map_fn(
         fn, [encoded_boxes, scores],
         dtype=(tf.float32, tf.float32, tf.int32, tf.int32),
         parallel_iterations=PARALLEL_ITERATIONS,
         back_prop=False, swap_memory=False, infer_shape=True
     )
+    #boxes, scores, classes, num_detections = fn((encoded_boxes[0], scores[0]))
     return boxes, scores, classes, num_detections

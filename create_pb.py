@@ -4,9 +4,6 @@ import shutil
 from model import model_fn
 from detector.input_pipeline.pipeline import resize_keeping_aspect_ratio
 
-# from params import wider_light_params as params
-from params import coco_params as params
-
 
 """
 The purpose of this script is to export
@@ -19,13 +16,46 @@ Also it creates a .pb frozen inference graph.
 OUTPUT_FOLDER = 'export/'  # for savedmodel
 GPU_TO_USE = '0'
 PB_FILE_PATH = 'model.pb'
-MIN_DIMENSION = 800
-MAX_DIMENSION = 1200
+MIN_DIMENSION = 768
 WIDTH, HEIGHT = None, None
-NMS_MAX_OUTPUT_SIZE = 100
 BATCH_SIZE = 1  # must be an integer
 assert BATCH_SIZE == 1
 
+params = {
+    "model_dir": "models/run00",
+    "train_dataset": "/home/dan/datasets/COCO/coco_person/train_shards/",
+    "val_dataset": "/home/dan/datasets/COCO/coco_person/val_shards/",
+
+    "backbone": "shufflenet",  # 'mobilenet' or 'shufflenet'
+    "depth_multiplier": 1.0,
+    "weight_decay": 1e-5,
+    "num_classes": 1,
+
+    "pretrained_checkpoint": "pretrained/shufflenet_v2_1.0x/model.ckpt-1661328",
+
+    "score_threshold": 0.05, "iou_threshold": 0.5, "max_boxes_per_class": 20,
+    "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
+
+    "use_focal_loss": True,
+    "gamma": 2.0,
+    "alpha": 0.25,
+
+    "use_ohem": False,
+    # "loss_to_use": "classification",
+    # "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
+    # "num_hard_examples": 3000, "nms_threshold": 0.99,
+    # "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
+
+    "lr_boundaries": [40000, 50000],
+    "lr_values": [0.01, 0.001, 0.00001],
+
+    "min_dimension": MIN_DIMENSION,
+    "batch_size": 14,
+    "image_height": 640,
+    "image_width": 640,
+
+    "num_steps": 60000,
+}
 
 def export_savedmodel():
     config = tf.ConfigProto()
@@ -35,23 +65,22 @@ def export_savedmodel():
         model_dir=params['model_dir'],
         session_config=config
     )
-    params['nms_max_output_size'] = NMS_MAX_OUTPUT_SIZE
     estimator = tf.estimator.Estimator(model_fn, params=params, config=run_config)
 
     def serving_input_receiver_fn():
         raw_images = tf.placeholder(dtype=tf.uint8, shape=[BATCH_SIZE, None, None, 3], name='images')
         w, h = tf.shape(raw_images)[2], tf.shape(raw_images)[1]
 
-        with tf.device('/gpu:0'):
+        #with tf.device('/cpu:0'):
 
-            images = tf.to_float(raw_images)
-            images = tf.squeeze(images, 0)
-            resized_images = resize_keeping_aspect_ratio(images, MIN_DIMENSION, MAX_DIMENSION)
+        images = tf.to_float(raw_images)
+        images = tf.squeeze(images, 0)
+        resized_images, box_scaler = resize_keeping_aspect_ratio(images, MIN_DIMENSION, divisor=128)
 
-            features = {
-                'images': (1.0/255.0) * tf.expand_dims(resized_images, 0),
-                'images_size': tf.stack([w, h])
-            }
+        features = {
+            'images': (1.0/255.0) * tf.expand_dims(resized_images, 0),
+            'box_scaler': box_scaler
+        }
         return tf.estimator.export.ServingInputReceiver(features, {'images': raw_images})
 
     shutil.rmtree(OUTPUT_FOLDER, ignore_errors=True)
@@ -74,15 +103,17 @@ def convert_to_pb():
             tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], last_saved_model)
 
             # output ops
-            keep_nodes = ['boxes', 'labels', 'scores', 'num_boxes_per_image']
-
+            keep_nodes = ['boxes', 'labels', 'scores', 'num_boxes']
+            
             input_graph_def = tf.graph_util.convert_variables_to_constants(
                 sess, graph.as_graph_def(),
                 output_node_names=keep_nodes
             )
+            keep_nodes += [n.name for n in graph.as_graph_def().node if 'nms' in n.name]
             output_graph_def = tf.graph_util.remove_training_nodes(
                 input_graph_def, protected_nodes=keep_nodes
             )
+            #output_graph_def = input_graph_def
 
             with tf.gfile.GFile(PB_FILE_PATH, 'wb') as f:
                 f.write(output_graph_def.SerializeToString())

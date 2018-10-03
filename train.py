@@ -13,7 +13,7 @@ GPU_TO_USE = '1'
 # params = json.load(open(CONFIG))
 
 params = {
-    "model_dir": "models/run00",
+    "model_dir": "models/run01",
     "train_dataset": "/home/dan/datasets/COCO/coco_person/train_shards/",
     "val_dataset": "/home/dan/datasets/COCO/coco_person/val_shards/",
 
@@ -27,15 +27,15 @@ params = {
     "score_threshold": 0.05, "iou_threshold": 0.5, "max_boxes_per_class": 20,
     "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
 
-    "use_focal_loss": True,
+    "use_focal_loss": False,
     "gamma": 2.0,
     "alpha": 0.25,
 
-    "use_ohem": False,
-    # "loss_to_use": "classification",
-    # "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
-    # "num_hard_examples": 3000, "nms_threshold": 0.99,
-    # "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
+    "use_ohem": True,
+    "loss_to_use": "classification",
+    "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
+    "num_hard_examples": 3000, "nms_threshold": 0.99,
+    "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
 
     "lr_boundaries": [40000, 50000],
     "lr_values": [0.01, 0.001, 0.00001],
