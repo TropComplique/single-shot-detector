@@ -5,7 +5,7 @@ from .constants import DATA_FORMAT, MIN_LEVEL
 from .utils import batch_norm_relu, conv2d_same
 
 
-BOX_PREDICTOR_DEPTH = 64
+BOX_PREDICTOR_DEPTH = 256
 
 
 class BoxPredictor(ABC):
@@ -29,38 +29,6 @@ class BoxPredictor(ABC):
             class_predictions: a float tensor with shape [batch_size, num_anchors, num_classes].
         """
         pass
-
-
-class SSDBoxPredictor(BoxPredictor):
-
-    def __call__(self, image_features):
-
-        encoded_boxes = []
-        class_predictions = []
-
-        with tf.variable_scope('prediction_layers'):
-
-            for i in range(len(image_features)):
-
-                x = image_features[i]
-                y = conv2d_same(
-                    x, self.num_classes * self.num_anchors_per_location * 4,
-                    kernel_size=1, name='box_encoding_predictor_%d' % i
-                )
-                # it has shape [batch_size, num_classes * num_anchors_per_location * 4, height_i, width_i]
-                encoded_boxes.append(y)
-
-                y = conv2d_same(
-                    x, self.num_classes * self.num_anchors_per_location,
-                    kernel_size=1, name='class_predictor_%d' % i
-                )
-                # it has  shape [batch_size, num_classes * num_anchors_per_location, height_i, width_i]
-                class_predictions.append(y)
-
-        return reshape_and_concatenate(
-            encoded_boxes, class_predictions,
-            self.num_classes, self.num_anchors_per_location
-        )
 
 
 class RetinaNetBoxPredictor(BoxPredictor):
@@ -185,3 +153,35 @@ def box_net(x, is_training, level, num_classes, num_anchors_per_location):
         data_format=DATA_FORMAT, name='encoded_boxes'
     )
     return encoded_boxes
+
+
+class SSDBoxPredictor(BoxPredictor):
+
+    def __call__(self, image_features):
+
+        encoded_boxes = []
+        class_predictions = []
+
+        with tf.variable_scope('prediction_layers'):
+
+            for i in range(len(image_features)):
+
+                x = image_features[i]
+                y = conv2d_same(
+                    x, self.num_classes * self.num_anchors_per_location * 4,
+                    kernel_size=1, name='box_encoding_predictor_%d' % i
+                )
+                # it has shape [batch_size, num_classes * num_anchors_per_location * 4, height_i, width_i]
+                encoded_boxes.append(y)
+
+                y = conv2d_same(
+                    x, self.num_classes * self.num_anchors_per_location,
+                    kernel_size=1, name='class_predictor_%d' % i
+                )
+                # it has  shape [batch_size, num_classes * num_anchors_per_location, height_i, width_i]
+                class_predictions.append(y)
+
+        return reshape_and_concatenate(
+            encoded_boxes, class_predictions,
+            self.num_classes, self.num_anchors_per_location
+        )

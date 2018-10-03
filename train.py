@@ -1,52 +1,14 @@
 import os
 import tensorflow as tf
 import json
-
 from model import model_fn, RestoreMovingAverageHook
 from detector.input_pipeline import Pipeline
 tf.logging.set_verbosity('INFO')
 
 
-GPU_TO_USE = '1'
-
-# CONFIG = 'config.json'
-# params = json.load(open(CONFIG))
-
-params = {
-    "model_dir": "models/run01",
-    "train_dataset": "/home/dan/datasets/COCO/coco_person/train_shards/",
-    "val_dataset": "/home/dan/datasets/COCO/coco_person/val_shards/",
-
-    "backbone": "shufflenet",  # 'mobilenet' or 'shufflenet'
-    "depth_multiplier": 1.0,
-    "weight_decay": 1e-5,
-    "num_classes": 1,
-
-    "pretrained_checkpoint": "pretrained/shufflenet_v2_1.0x/model.ckpt-1661328",
-
-    "score_threshold": 0.05, "iou_threshold": 0.5, "max_boxes_per_class": 20,
-    "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
-
-    "use_focal_loss": False,
-    "gamma": 2.0,
-    "alpha": 0.25,
-
-    "use_ohem": True,
-    "loss_to_use": "classification",
-    "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
-    "num_hard_examples": 3000, "nms_threshold": 0.99,
-    "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
-
-    "lr_boundaries": [40000, 50000],
-    "lr_values": [0.01, 0.001, 0.00001],
-
-    "min_dimension": 768,
-    "batch_size": 14,
-    "image_height": 640,
-    "image_width": 640,
-
-    "num_steps": 60000,
-}
+GPU_TO_USE = '0'
+CONFIG = 'config.json'
+params = json.load(open(CONFIG))
 
 
 def get_input_fn(is_training=True):

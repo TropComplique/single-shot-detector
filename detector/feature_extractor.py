@@ -4,7 +4,7 @@ from .constants import DATA_FORMAT, MIN_LEVEL
 from .utils import batch_norm_relu, conv2d_same
 
 
-FPN_DEPTH = 64
+FPN_DEPTH = 256
 
 
 class FeatureExtractor(ABC):
@@ -24,25 +24,6 @@ class FeatureExtractor(ABC):
             has shape [batch, channels_i, height_i, width_i].
         """
         pass
-
-
-class SSDFeatureExtractor(FeatureExtractor):
-
-    def __call__(self, images):
-
-        features = self.backbone(images, self.is_training)
-        image_features = [features['c4'], features['c5']]
-        x = features['c5']
-
-        filters = [512, 256, 256, 128]
-        for i, num_filters in enumerate(filters):
-            x = conv2d_same(x, num_filters // 2, kernel_size=1, name='conv1_%d' % i)
-            x = batch_norm_relu(x, self.is_training, name='batch_norm1_%d' % i)
-            x = conv2d_same(x, num_filters, kernel_size=3, stride=2, name='conv2_%d' % i)
-            x = batch_norm_relu(x, self.is_training, name='batch_norm2_%d' % i)
-            image_features.append(x)
-
-        return image_features
 
 
 class RetinaNetFeatureExtractor(FeatureExtractor):
@@ -117,3 +98,22 @@ def nearest_neighbor_upsample(x, rate=2, scope='upsampling'):
             x = tf.reshape(x, [batch_size, height * rate, width * rate, channels])
 
         return x
+
+
+class SSDFeatureExtractor(FeatureExtractor):
+
+    def __call__(self, images):
+
+        features = self.backbone(images, self.is_training)
+        image_features = [features['c4'], features['c5']]
+        x = features['c5']
+
+        filters = [512, 256, 256, 128]
+        for i, num_filters in enumerate(filters):
+            x = conv2d_same(x, num_filters // 2, kernel_size=1, name='conv1_%d' % i)
+            x = batch_norm_relu(x, self.is_training, name='batch_norm1_%d' % i)
+            x = conv2d_same(x, num_filters, kernel_size=3, stride=2, name='conv2_%d' % i)
+            x = batch_norm_relu(x, self.is_training, name='batch_norm2_%d' % i)
+            image_features.append(x)
+
+        return image_features

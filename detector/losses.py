@@ -20,23 +20,6 @@ def localization_loss(predictions, targets, weights):
     return weights * tf.reduce_sum(loss, axis=2)
 
 
-def usual_classification_loss(predictions, targets, weights):
-    """
-    Arguments:
-        predictions: a float tensor with shape [batch_size, num_anchors, num_classes],
-            representing the predicted logits for each class.
-        targets: a float tensor with shape [batch_size, num_anchors, num_classes],
-            representing one-hot encoded classification targets.
-        weights: a float tensor with shape [batch_size, num_anchors].
-    Returns:
-        a float tensor with shape [batch_size, num_anchors].
-    """
-    cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=targets, logits=predictions
-    )
-    return weights * tf.reduce_sum(cross_entropy, axis=2)
-
-
 def focal_loss(predictions, targets, weights, gamma=2.0, alpha=0.25):
     """
     Arguments:
@@ -66,6 +49,23 @@ def focal_loss(predictions, targets, weights, gamma=2.0, alpha=0.25):
     # they all have shape [batch_size, num_anchors, num_classes]
 
     return weights * tf.reduce_sum(focal_loss, axis=2)
+
+
+def usual_classification_loss(predictions, targets, weights):
+    """
+    Arguments:
+        predictions: a float tensor with shape [batch_size, num_anchors, num_classes],
+            representing the predicted logits for each class.
+        targets: a float tensor with shape [batch_size, num_anchors, num_classes],
+            representing one-hot encoded classification targets.
+        weights: a float tensor with shape [batch_size, num_anchors].
+    Returns:
+        a float tensor with shape [batch_size, num_anchors].
+    """
+    cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
+        labels=targets, logits=predictions
+    )
+    return weights * tf.reduce_sum(cross_entropy, axis=2)
 
 
 def apply_hard_mining(

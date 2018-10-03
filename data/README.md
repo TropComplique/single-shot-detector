@@ -9,16 +9,16 @@
 4. Create tfrecords  
   ```
   python create_tfrecords.py \
-      --image_dir=/home/gpu2/hdd/dan/COCO/images/train2017/ \
-      --annotations_dir=/home/gpu2/hdd/dan/COCO/train_annotations/ \
-      --output=/mnt/datasets/COCO/train_shards/ \
+      --image_dir=/home/dan/datasets/COCO/images/train2017/ \
+      --annotations_dir=/home/dan/datasets/COCO/train_annotations/ \
+      --output=/home/dan/datasets/COCO/train_shards/ \
       --labels=coco_labels.txt \
       --num_shards=1000
 
   python create_tfrecords.py \
-      --image_dir=/home/gpu2/hdd/dan/COCO/images/val2017/ \
-      --annotations_dir=/home/gpu2/hdd/dan/COCO/val_annotations/ \
-      --output=/mnt/datasets/COCO/val_shards/ \
+      --image_dir=/home/dan/datasets/COCO/images/val2017/ \
+      --annotations_dir=/home/dan/datasets/COCO/val_annotations/ \
+      --output=/home/dan/datasets/COCO/val_shards/ \
       --labels=coco_labels.txt \
       --num_shards=1
   ```  

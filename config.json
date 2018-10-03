@@ -1,36 +1,33 @@
 {
-  "model_params": {
-    "model_dir": "models/run00",
+    "model_dir": "models/run00/",
+    "train_dataset": "/home/dan/datasets/COCO/train_shards/",
+    "val_dataset": "/home/dan/datasets/COCO/val_shards/",
+    "pretrained_checkpoint": "pretrained/mobilenet_v1_1.0_224.ckpt",
 
-    "depth_multiplier": 1.4,
-    "num_classes": 80, "weight_decay": 1e-5,
-    "pretrained_checkpoint": "pretrained/mobilenet_v2_1.4_224.ckpt",
-    "freeze": "",
-
-    "scales": null,
-    "min_scale": 0.2, "max_scale": 0.95,
-    "aspect_ratios": [0.3333, 0.5, 1.0, 2.0, 3.0],
-    "interpolated_scale_aspect_ratio": 1.0,
-    "reduce_boxes_in_lowest_layer": true,
+    "backbone": "mobilenet",
+    "depth_multiplier": 1.0,
+    "weight_decay": 1e-5,
+    "num_classes": 80,
 
     "score_threshold": 0.05, "iou_threshold": 0.5, "max_boxes_per_class": 20,
-
     "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
 
+    "use_focal_loss": true,
+    "gamma": 2.0,
+    "alpha": 0.25,
+
+    "num_steps": 120000,
+    "lr_boundaries": [70000, 110000],
+    "lr_values": [0.01, 0.001, 0.0001],
+
+    "min_dimension": 640,
+    "batch_size": 14,
+    "image_height": 640,
+    "image_width": 640,
+
+    "use_ohem": false,
     "loss_to_use": "classification",
     "loc_loss_weight": 0.0, "cls_loss_weight": 1.0,
     "num_hard_examples": 3000, "nms_threshold": 0.99,
     "max_negatives_per_positive": 3.0, "min_negatives_per_image": 3,
-
-    "lr_boundaries": [60000, 120000, 150000, 170000],
-    "lr_values": [0.009, 0.005, 0.001, 0.0005, 0.0001]
-  },
-
-  "input_pipeline_params": {
-    "image_size": [512, 512],
-    "batch_size": 16,
-    "train_dataset": "data/train_shards/",
-    "val_dataset": "data/val_shards/",
-    "num_steps": 180000
-  }
 }

@@ -1,9 +1,8 @@
 import tensorflow as tf
-
 from detector import SSD
 from detector.anchor_generator import AnchorGenerator
-from detector.box_predictor import SSDBoxPredictor, RetinaNetBoxPredictor
-from detector.feature_extractor import SSDFeatureExtractor, RetinaNetFeatureExtractor
+from detector.box_predictor import RetinaNetBoxPredictor
+from detector.feature_extractor import RetinaNetFeatureExtractor
 from detector.backbones import mobilenet_v1, shufflenet_v2
 from metrics import Evaluator
 
@@ -20,27 +19,26 @@ def model_fn(features, labels, mode, params):
 
     # the base network
     def backbone(images, is_training):
-        return shufflenet_v2(
+        return mobilenet_v1(
             images, is_training,
-            depth_multiplier=str(params['depth_multiplier'])
+            depth_multiplier=params['depth_multiplier']
+            # depth_multiplier=str(params['depth_multiplier'])
         )
 
     # add additional layers to the base network
-    # feature_extractor = RetinaNetFeatureExtractor(is_training, backbone)
-    feature_extractor = SSDFeatureExtractor(is_training, backbone)
-    
+    feature_extractor = RetinaNetFeatureExtractor(is_training, backbone)
+
     # ssd anchor maker
     anchor_generator = AnchorGenerator(
-        strides=[16, 32, 64, 128, 256, 512],#[8, 16, 32, 64, 128],
-        scales=[32, 64, 128, 256, 512, 1024],#[32, 64, 128, 256, 512],
+        strides=[8, 16, 32, 64, 128],
+        scales=[32, 64, 128, 256, 512],
         scale_multipliers=[1.0, 1.4142],
         aspect_ratios=[1.0, 2.0, 0.5]
     )
     num_anchors_per_location = anchor_generator.num_anchors_per_location
 
     # add layers that predict boxes and labels
-    # box_predictor = RetinaNetBoxPredictor(is_training, params['num_classes'], num_anchors_per_location)
-    box_predictor = SSDBoxPredictor(is_training, params['num_classes'], num_anchors_per_location)
+    box_predictor = RetinaNetBoxPredictor(is_training, params['num_classes'], num_anchors_per_location)
 
     # collect everything on one place
     ssd = SSD(
@@ -52,7 +50,8 @@ def model_fn(features, labels, mode, params):
     # use a pretrained backbone network
     if is_training:
         with tf.name_scope('init_from_checkpoint'):
-            checkpoint_scope = 'ShuffleNetV2/'
+            # checkpoint_scope = 'ShuffleNetV2/'
+            checkpoint_scope = 'MobilenetV1/'
             tf.train.init_from_checkpoint(
                 params['pretrained_checkpoint'],
                 {checkpoint_scope: checkpoint_scope}
@@ -69,8 +68,8 @@ def model_fn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
 
         box_scaler = features['box_scaler']
-        predictions['boxes'] = predictions['boxes'] / box_scaler
-        
+        predictions['boxes'] /= box_scaler
+
         export_outputs = tf.estimator.export.PredictOutput({
             name: tf.identity(tensor, name)
             for name, tensor in predictions.items()
@@ -138,7 +137,7 @@ def add_weight_decay(weight_decay):
     )
     trainable_vars = tf.trainable_variables()
     kernels = [
-        v for v in trainable_vars 
+        v for v in trainable_vars
         if ('weights' in v.name or 'kernel' in v.name) and 'depthwise_weights' not in v.name
     ]
     for K in kernels:

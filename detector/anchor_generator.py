@@ -30,6 +30,7 @@ class AnchorGenerator:
             scale_multipliers: a list of floats, a factors for a main scale.
             aspect_ratios: a list of float numbers, aspect ratios to place on each grid point.
         """
+        assert len(strides) == len(scales)
         self.strides = strides
         self.scales = scales
         self.scale_multipliers = scale_multipliers
