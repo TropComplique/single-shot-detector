@@ -31,7 +31,7 @@ session_config.gpu_options.visible_device_list = GPU_TO_USE
 run_config = tf.estimator.RunConfig()
 run_config = run_config.replace(
     model_dir=params['model_dir'], session_config=session_config,
-    save_summary_steps=1000, save_checkpoints_secs=1800,
+    save_summary_steps=60, save_checkpoints_secs=1800,
     log_step_count_steps=1000
 )
 

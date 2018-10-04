@@ -6,22 +6,22 @@
 
     "backbone": "mobilenet",
     "depth_multiplier": 1.0,
-    "weight_decay": 1e-5,
+    "weight_decay": 5e-5,
     "num_classes": 80,
 
     "score_threshold": 0.05, "iou_threshold": 0.5, "max_boxes_per_class": 20,
-    "localization_loss_weight": 1.0, "classification_loss_weight": 1.0,
+    "localization_loss_weight": 1.0, "classification_loss_weight": 3.0,
 
     "use_focal_loss": true,
     "gamma": 2.0,
     "alpha": 0.25,
 
     "num_steps": 120000,
-    "lr_boundaries": [70000, 110000],
+    "lr_boundaries": [75000, 110000],
     "lr_values": [0.01, 0.001, 0.0001],
 
     "min_dimension": 640,
-    "batch_size": 14,
+    "batch_size": 8,
     "image_height": 640,
     "image_width": 640,
 

@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from detector.constants import PARALLEL_ITERATIONS, POSITIVES_THRESHOLD, NEGATIVES_THRESHOLD
+from detector.constants import PARALLEL_ITERATIONS, POSITIVES_THRESHOLD, NEGATIVES_THRESHOLD, MIN_LEVEL
 from detector.utils import batch_multiclass_non_max_suppression
 from detector.training_target_creation import get_training_targets
 from detector.losses import localization_loss, usual_classification_loss, focal_loss, apply_hard_mining
@@ -168,12 +168,12 @@ class SSD:
             name: a string.
         """
         index = 0
-        for i, n in enumerate(self.num_anchors_per_feature_map):
+        for i, n in enumerate(self.num_anchors_per_feature_map, MIN_LEVEL):
             k = tf.to_int32(tf.ceil(tf.to_float(n) * 0.20))  # top 20%
             biggest_values, _ = tf.nn.top_k(tensor[:, index:(index + n)], k, sorted=False)
             # it has shape [batch_size, k]
             tf.summary.histogram(
-                name + '_on_scale_' + str(i),
+                name + '_on_level_' + str(i),
                 tf.reduce_mean(biggest_values, axis=0)
             )
             index += n
@@ -181,10 +181,10 @@ class SSD:
     def _add_scalewise_matches_summaries(self, weights):
         """Adds summaries for the number of matches on each scale."""
         index = 0
-        for i, n in enumerate(self.num_anchors_per_feature_map):
+        for i, n in enumerate(self.num_anchors_per_feature_map, MIN_LEVEL):
             matches_per_image = tf.reduce_sum(weights[:, index:(index + n)], axis=1)
             tf.summary.scalar(
-                'mean_matches_per_image_on_scale_' + str(i),
+                'mean_matches_per_image_on_level_' + str(i),
                 tf.reduce_mean(matches_per_image, axis=0)
             )
             index += n
