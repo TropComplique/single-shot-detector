@@ -100,6 +100,10 @@ class AnchorGenerator:
                 ))
 
         with tf.name_scope('concatenate_normalize_clip'):
+
+            # this is for visualization and debugging only
+            self.raw_anchors = anchors
+
             anchors = tf.concat(anchors, axis=0)
 
             # convert to the [0, 1] range
