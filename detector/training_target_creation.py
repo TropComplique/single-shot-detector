@@ -139,7 +139,6 @@ def create_targets(anchors, groundtruth_boxes, groundtruth_labels, matches):
         groundtruth_labels: an int tensor with shape [N], possible values
             that it can contain are [0, 1, 2, ..., (num_classes - 1)].
         matches: an int tensor with shape [num_anchors].
-        num_classes: an integer.
     Returns:
         reg_targets: a float tensor with shape [num_anchors, 4].
         cls_targets: an int tensor with shape [num_anchors], possible values

@@ -78,7 +78,7 @@ def batch_multiclass_non_max_suppression(
         encoded_boxes = tf.transpose(encoded_boxes, [1, 0, 2])
         boxes = batch_decode(encoded_boxes, chosen_anchors)
         boxes = tf.transpose(boxes, [1, 0, 2])  # shape [num_confident, num_classes, 4]
-        boxes.set_shape([batch_size, num_classes, 4])
+        boxes.set_shape([None, num_classes, 4])
 
         boxes, scores, classes = multiclass_non_max_suppression(
             boxes, scores, score_threshold,

@@ -23,13 +23,13 @@ RESIZE_METHOD = tf.image.ResizeMethod.NEAREST_NEIGHBOR
 
 # thresholds for IoU when creating training targets
 POSITIVES_THRESHOLD = 0.5
-NEGATIVES_THRESHOLD = 0.4
+NEGATIVES_THRESHOLD = 0.5
 
 # this is used in tf.map_fn when creating training targets or doing NMS
 PARALLEL_ITERATIONS = 8
 
 # this can be important
-BATCH_NORM_MOMENTUM = 0.97
+BATCH_NORM_MOMENTUM = 0.99
 
 # it is important to set this value
 BATCH_NORM_EPSILON = 1e-3
