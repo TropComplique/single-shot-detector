@@ -18,8 +18,8 @@ Also it creates a .pb frozen inference graph.
 CONFIG = 'config.json'
 OUTPUT_FOLDER = 'export/'  # for savedmodel
 GPU_TO_USE = '0'
-PB_FILE_PATH = 'model.pb'
-MIN_DIMENSION = 768
+PB_FILE_PATH = 'inference/model.pb'
+MIN_DIMENSION = 640
 WIDTH, HEIGHT = None, None
 BATCH_SIZE = 1  # must be an integer
 assert BATCH_SIZE == 1
