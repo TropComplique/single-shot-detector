@@ -123,13 +123,13 @@ class Pipeline:
             probability=0.9,
             min_object_covered=0.9,
             aspect_ratio_range=(0.9, 1.1),
-            area_range=(0.333, 0.9),
-            overlap_thresh=0.3
+            area_range=(0.67, 0.97),
+            overlap_thresh=0.1
         )
         image = tf.image.resize_images(image, self.image_size, method=RESIZE_METHOD)
 
-        image = random_color_manipulations(image, probability=0.25, grayscale_probability=0.05)
-        image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.2)
+        image = random_color_manipulations(image, probability=0.1, grayscale_probability=0.01)
+        image = random_pixel_value_scale(image, minval=0.85, maxval=1.15, probability=0.1)
         boxes = random_jitter_boxes(boxes, ratio=0.01)
         image, boxes = random_flip_left_right(image, boxes)
         return image, boxes, labels
