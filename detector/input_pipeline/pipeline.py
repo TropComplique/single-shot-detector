@@ -124,7 +124,7 @@ class Pipeline:
             min_object_covered=0.9,
             aspect_ratio_range=(0.9, 1.1),
             area_range=(0.67, 0.97),
-            overlap_thresh=0.1
+            overlap_thresh=0.3
         )
         image = tf.image.resize_images(image, self.image_size, method=RESIZE_METHOD)
 

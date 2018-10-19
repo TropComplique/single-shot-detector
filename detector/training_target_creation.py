@@ -49,7 +49,7 @@ def match_boxes(
         anchors, groundtruth_boxes, positives_threshold=0.5,
         negatives_threshold=0.4, force_match_groundtruth=True):
     """
-    If the anchor has IoU over `positives_threshold` with any groundtruth box,
+    If an anchor has IoU over `positives_threshold` with any groundtruth box,
     it will be set a positive label.
     Anchors which have highest IoU for a groundtruth box will
     also be assigned a positive label.

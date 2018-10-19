@@ -64,7 +64,6 @@ def batch_multiclass_non_max_suppression(
 
         Where N' = max_boxes_per_class * num_classes.
     """
-    batch_size = scores.shape[0].value  # an integer or None
     num_classes = scores.shape[2].value  # an integer
 
     def fn(x):

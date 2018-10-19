@@ -31,14 +31,17 @@ session_config.gpu_options.visible_device_list = GPU_TO_USE
 run_config = tf.estimator.RunConfig()
 run_config = run_config.replace(
     model_dir=params['model_dir'], session_config=session_config,
-    save_summary_steps=60, save_checkpoints_secs=1800,
+    save_summary_steps=600, save_checkpoints_secs=1800,
     log_step_count_steps=1000
 )
 
 
 train_input_fn = get_input_fn(is_training=True)
 val_input_fn = get_input_fn(is_training=False)
-estimator = tf.estimator.Estimator(model_fn, params=params, config=run_config)
+estimator = tf.estimator.Estimator(
+    model_fn, params=params, config=run_config,
+    warm_start_from=tf.estimator.WarmStartSettings(params['pretrained_checkpoint'], 'MobilenetV1/*')
+)
 
 
 train_spec = tf.estimator.TrainSpec(train_input_fn, max_steps=params['num_steps'])

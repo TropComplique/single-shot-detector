@@ -132,8 +132,8 @@ def decode(codes, anchors):
         th /= SCALE_FACTORS[2]
         tw /= SCALE_FACTORS[3]
 
-        w = tf.exp(tw) * wa
         h = tf.exp(th) * ha
+        w = tf.exp(tw) * wa
         ycenter = ty * ha + ycenter_a
         xcenter = tx * wa + xcenter_a
 
