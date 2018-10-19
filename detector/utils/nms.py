@@ -1,6 +1,6 @@
 import tensorflow as tf
 from detector.constants import PARALLEL_ITERATIONS
-from .box_utils import batch_decode
+from .box_utils import decode
 
 
 def multiclass_non_max_suppression(
@@ -12,7 +12,7 @@ def multiclass_non_max_suppression(
     threshold prior to applying NMS.
 
     Arguments:
-        boxes: a float tensor with shape [N, num_classes, 4],
+        boxes: a float tensor with shape [N, 4],
             normalized to [0, 1] range.
         scores: a float tensor with shape [N, num_classes].
         score_threshold: a float number.
@@ -25,18 +25,17 @@ def multiclass_non_max_suppression(
 
         Where 0 <= N' <= num_classes * max_boxes_per_class.
     """
-    boxes_list = tf.unstack(boxes, axis=1)
     scores_list = tf.unstack(scores, axis=1)
 
     selected_boxes, selected_scores, selected_classes = [], [], []
-    for i in range(len(boxes_list)):
+    for i in range(len(scores_list)):
 
         selected_indices = tf.image.non_max_suppression(
-            boxes_list[i], scores_list[i], max_output_size=max_boxes_per_class,
+            boxes, scores_list[i], max_output_size=max_boxes_per_class,
             iou_threshold=iou_threshold, score_threshold=score_threshold
         )
 
-        selected_boxes += [tf.gather(boxes_list[i], selected_indices)]
+        selected_boxes += [tf.gather(boxes, selected_indices)]
         selected_scores += [tf.gather(scores_list[i], selected_indices)]
         selected_classes += [i * tf.ones_like(selected_indices)]
 
@@ -53,7 +52,7 @@ def batch_multiclass_non_max_suppression(
     """Same as multiclass_non_max_suppression but for a batch of images.
 
     Arguments:
-        encoded_boxes: a float tensor with shape [batch_size, N, num_classes, 4].
+        encoded_boxes: a float tensor with shape [batch_size, N, 4].
         anchors: a float tensor with shape [N, 4].
         scores: a float tensor with shape [batch_size, N, num_classes].
     Returns:
@@ -70,14 +69,12 @@ def batch_multiclass_non_max_suppression(
         encoded_boxes, scores = x
 
         is_confident = tf.reduce_max(scores, axis=1) >= score_threshold  # shape [N]
-        encoded_boxes = tf.boolean_mask(encoded_boxes, is_confident)  # shape [num_confident, num_classes, 4]
+        encoded_boxes = tf.boolean_mask(encoded_boxes, is_confident)  # shape [num_confident, 4]
         scores = tf.boolean_mask(scores, is_confident)  # shape [num_confident, num_classes]
         chosen_anchors = tf.boolean_mask(anchors, is_confident)  # shape [num_confident, 4]
 
-        encoded_boxes = tf.transpose(encoded_boxes, [1, 0, 2])
-        boxes = batch_decode(encoded_boxes, chosen_anchors)
-        boxes = tf.transpose(boxes, [1, 0, 2])  # shape [num_confident, num_classes, 4]
-        boxes.set_shape([None, num_classes, 4])
+        boxes = decode(encoded_boxes, chosen_anchors)
+        boxes = tf.clip_by_value(boxes, 0.0, 1.0)
 
         boxes, scores, classes = multiclass_non_max_suppression(
             boxes, scores, score_threshold,

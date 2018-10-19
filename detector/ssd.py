@@ -36,7 +36,7 @@ class SSD:
 
         self.raw_predictions = box_predictor(image_features)
         # a dict with two float tensors:
-        # `encoded_boxes` has shape [batch_size, num_anchors, num_classes, 4],
+        # `encoded_boxes` has shape [batch_size, num_anchors, 4],
         # `class_predictions` has shape [batch_size, num_anchors, num_classes]
 
     def get_predictions(self, score_threshold=0.05, iou_threshold=0.5, max_boxes_per_class=20):
@@ -118,12 +118,6 @@ class SSD:
             with tf.name_scope('localization_loss'):
 
                 encoded_boxes = self.raw_predictions['encoded_boxes']
-                # it has shape [batch_size, num_anchors, num_classes, 4]
-
-                # choose only boxes of a true class
-                cls_targets = tf.expand_dims(cls_targets, axis=3)
-                encoded_boxes *= cls_targets
-                encoded_boxes = tf.reduce_sum(encoded_boxes, axis=2)
                 # it has shape [batch_size, num_anchors, 4]
 
                 loc_losses = localization_loss(encoded_boxes, reg_targets, weights)
