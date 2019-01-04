@@ -113,8 +113,9 @@ class AnchorGenerator:
             ]))
             anchors /= scaler
 
-            # clip to the unit square
-            anchors = tf.clip_by_value(anchors, 0.0, 1.0)
+            # clip to the unit square?
+            # anchors = tf.clip_by_value(anchors, 0.0, 1.0)
+            # it important to NOT do this!
 
         return anchors
 

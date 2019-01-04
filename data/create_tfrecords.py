@@ -27,16 +27,16 @@ Example of a json annotation (with filename "132416.json"):
   "size": {"depth": 3, "width": 1920, "height": 1080}
 }
 
-Labels text file contains a list of all label names.
+`labels` text file contains a list of all label names.
 One label name per line. Number of line - label encoding by integer.
 
 Example of use:
 python create_tfrecords.py \
-    --image_dir=/mnt/datasets/dan/wider_train/images/ \
-    --annotations_dir=/mnt/datasets/dan/wider_train/annotations/ \
-    --output=/mnt/datasets/dan/wider_train_shards/ \
-    --labels=wider_labels.txt \
-    --num_shards=100
+    --image_dir=/home/gpu2/hdd/dan/COCO/images/train2017/ \
+    --annotations_dir=/home/gpu2/hdd/dan/COCO/train_annotations/ \
+    --output=/mnt/datasets/COCO/train_shards/ \
+    --labels=coco_labels.txt \
+    --num_shards=1000
 """
 
 
@@ -57,7 +57,7 @@ def dict_to_tf_example(annotation, image_dir, label_encoder):
     box coordinates provided by the raw data.
 
     Arguments:
-        data: a dict.
+        annotation: a dict.
         image_dir: a string, path to the image directory.
         label_encoder: a dict, class name -> integer.
     Returns:

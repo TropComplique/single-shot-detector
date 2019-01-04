@@ -3,7 +3,7 @@ import tensorflow as tf
 from detector.constants import PARALLEL_ITERATIONS, POSITIVES_THRESHOLD, NEGATIVES_THRESHOLD, MIN_LEVEL
 from detector.utils import batch_multiclass_non_max_suppression
 from detector.training_target_creation import get_training_targets
-from detector.losses import localization_loss, usual_classification_loss, focal_loss, apply_hard_mining
+from detector.losses import localization_loss, focal_loss
 
 
 class SSD:
@@ -54,7 +54,7 @@ class SSD:
         with tf.name_scope('postprocessing'):
 
             encoded_boxes = self.raw_predictions['encoded_boxes']
-            # it has shape [batch_size, num_anchors, num_classes, 4]
+            # it has shape [batch_size, num_anchors, 4]
 
             class_predictions = self.raw_predictions['class_predictions']
             scores = tf.sigmoid(class_predictions)
@@ -103,17 +103,11 @@ class SSD:
                 not_ignore = tf.to_float(tf.greater_equal(matches, -1))
                 # if a value is `-2` then we ignore its anchor
 
-                if params['use_focal_loss']:
-                    cls_losses = focal_loss(
-                        class_predictions, cls_targets, weights=not_ignore,
-                        gamma=params['gamma'], alpha=params['alpha']
-                    )
-                else:
-                    cls_losses = usual_classification_loss(
-                        class_predictions, cls_targets,
-                        weights=not_ignore
-                    )
-                # `cls_losses` has shape [batch_size, num_anchors]
+                cls_losses = focal_loss(
+                    class_predictions, cls_targets, weights=not_ignore,
+                    gamma=params['gamma'], alpha=params['alpha']
+                )
+                # it has shape [batch_size, num_anchors]
 
             with tf.name_scope('localization_loss'):
 
@@ -134,23 +128,8 @@ class SSD:
                 self._add_scalewise_summaries(loc_losses, name='localization_losses')
                 tf.summary.scalar('total_mean_matches_per_image', tf.reduce_mean(matches_per_image, axis=0))
 
-            if params['use_ohem']:
-                with tf.name_scope('ohem'):
-                    loc_loss, cls_loss = apply_hard_mining(
-                        loc_losses, cls_losses,
-                        encoded_boxes, matches, self.anchors,
-                        loss_to_use=params['loss_to_use'],
-                        loc_loss_weight=params['loc_loss_weight'],
-                        cls_loss_weight=params['cls_loss_weight'],
-                        num_hard_examples=params['num_hard_examples'],
-                        nms_threshold=params['nms_threshold'],
-                        max_negatives_per_positive=params['max_negatives_per_positive'],
-                        min_negatives_per_image=params['min_negatives_per_image']
-                    )
-            else:
-                loc_loss = tf.reduce_sum(loc_losses, axis=[0, 1])
-                cls_loss = tf.reduce_sum(cls_losses, axis=[0, 1])
-
+            loc_loss = tf.reduce_sum(loc_losses, axis=[0, 1])
+            cls_loss = tf.reduce_sum(cls_losses, axis=[0, 1])
             return {'localization_loss': loc_loss/normalizer, 'classification_loss': cls_loss/normalizer}
 
     def _add_scalewise_summaries(self, tensor, name):

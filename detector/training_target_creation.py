@@ -118,7 +118,7 @@ def match_boxes(
 
         # some forced matches could be very bad!
         forced_matches_values = tf.reduce_max(similarity_matrix, axis=1)  # shape [N]
-        small_iou = 0.05  # this requires that forced match has at least small intersection
+        small_iou = 0.1  # this requires that forced match has at least small intersection
         is_okay = tf.to_int32(tf.greater_equal(forced_matches_values, small_iou))  # shape [N]
         forced_matches_indicators = forced_matches_indicators * tf.expand_dims(is_okay, axis=1)
 
