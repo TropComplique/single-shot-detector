@@ -25,7 +25,7 @@ BATCH_SIZE = 1  # must be an integer
 assert BATCH_SIZE == 1
 
 params = json.load(open(CONFIG))
-params['min_dimension'] = MIN_DIMENSION,
+#params['min_dimension'] = MIN_DIMENSION,
 
 
 def export_savedmodel():

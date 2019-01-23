@@ -40,7 +40,7 @@ train_input_fn = get_input_fn(is_training=True)
 val_input_fn = get_input_fn(is_training=False)
 estimator = tf.estimator.Estimator(
     model_fn, params=params, config=run_config,
-    warm_start_from=tf.estimator.WarmStartSettings(params['pretrained_checkpoint'], 'MobilenetV1/*')
+    warm_start_from=tf.estimator.WarmStartSettings(params['pretrained_checkpoint'], ['MobilenetV1/*'])
 )
 
 

@@ -29,7 +29,7 @@ NEGATIVES_THRESHOLD = 0.5
 PARALLEL_ITERATIONS = 8
 
 # this can be important
-BATCH_NORM_MOMENTUM = 0.97
+BATCH_NORM_MOMENTUM = 0.993
 
 # it is important to set this value
 BATCH_NORM_EPSILON = 1e-3
