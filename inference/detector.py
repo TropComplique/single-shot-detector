@@ -33,7 +33,7 @@ class Detector:
         config_proto = tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False)
         self.sess = tf.Session(graph=graph, config=config_proto)
 
-    def __call__(self, image, score_threshold=0.05):
+    def __call__(self, image, score_threshold=0.1):
         """Detect faces.
 
         Arguments:
@@ -50,7 +50,7 @@ class Detector:
 
         feed_dict = {self.input_image: np.expand_dims(image, 0)}
         boxes, labels, scores, n = self.sess.run(self.output_ops, feed_dict)
-        
+
         n = n[0]
         to_keep = scores[0][:n] > score_threshold
         boxes = boxes[0][:n][to_keep]

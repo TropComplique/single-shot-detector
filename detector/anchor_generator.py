@@ -46,7 +46,7 @@ class AnchorGenerator:
             image_height, image_width: scalar int tensors.
         Returns:
             a float tensor with shape [num_anchors, 4],
-            boxes with normalized coordinates (and clipped to the unit square).
+            boxes with normalized coordinates.
         """
         with tf.name_scope('anchor_generator'):
 

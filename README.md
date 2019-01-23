@@ -1,8 +1,7 @@
 # SSD in tensorflow
-Work in progress
 
 ## Requirements
-* tensorflow 1.10
+* tensorflow 1.12
 * tqdm, Pillow, numpy, matplotlib
 
 ## Credit

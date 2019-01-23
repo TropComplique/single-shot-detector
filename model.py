@@ -19,11 +19,16 @@ def model_fn(features, labels, mode, params):
 
     # the base network
     def backbone(images, is_training):
-        return mobilenet_v1(
-            images, is_training,
-            depth_multiplier=params['depth_multiplier']
-            # depth_multiplier=str(params['depth_multiplier'])
-        )
+        if params['backbone'] == 'mobilenet':
+            return mobilenet_v1(
+                images, is_training,
+                depth_multiplier=params['depth_multiplier']
+            )
+        elif params['backbone'] == 'shufflenet':
+            return shufflenet_v2(
+                images, is_training,
+                depth_multiplier=str(params['depth_multiplier'])
+            )
 
     # add additional layers to the base network
     feature_extractor = RetinaNetFeatureExtractor(is_training, backbone)
@@ -57,6 +62,8 @@ def model_fn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.PREDICT:
 
+        # because images are resized before
+        # feeding them to the network
         box_scaler = features['box_scaler']
         predictions['boxes'] /= box_scaler
 
@@ -99,13 +106,15 @@ def model_fn(features, labels, mode, params):
     assert mode == tf.estimator.ModeKeys.TRAIN
     with tf.variable_scope('learning_rate'):
         global_step = tf.train.get_global_step()
-        learning_rate = tf.train.cosine_decay(1e-4, global_step, decay_steps=350000)
+        learning_rate = tf.train.cosine_decay(
+            params['initial_learning_rate'],
+            global_step, decay_steps=params['num_steps']
+        )
         tf.summary.scalar('learning_rate', learning_rate)
 
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops), tf.variable_scope('optimizer'):
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        #optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.9)
         grads_and_vars = optimizer.compute_gradients(total_loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step)
 
