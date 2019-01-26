@@ -7,7 +7,7 @@ tf.logging.set_verbosity('INFO')
 
 
 GPU_TO_USE = '0'
-CONFIG = 'config.json'
+CONFIG = 'config_shufflenet.json'
 params = json.load(open(CONFIG))
 
 
