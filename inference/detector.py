@@ -41,9 +41,9 @@ class Detector:
                 that represents a RGB image.
             score_threshold: a float number.
         Returns:
-            boxes: a float numpy array of shape [num_faces, 4].
-            labels: an int numpy array of shape [num_faces].
-            scores: a float numpy array of shape [num_faces].
+            boxes: a float numpy array of shape [N, 4].
+            labels: an int numpy array of shape [N].
+            scores: a float numpy array of shape [N].
 
         Note that box coordinates are in the order: ymin, xmin, ymax, xmax!
         """
@@ -51,7 +51,7 @@ class Detector:
         feed_dict = {self.input_image: np.expand_dims(image, 0)}
         boxes, labels, scores, n = self.sess.run(self.output_ops, feed_dict)
 
-        n = n[0]
+        n = n[0]  # it equals to N
         to_keep = scores[0][:n] > score_threshold
         boxes = boxes[0][:n][to_keep]
         labels = labels[0][:n][to_keep]

@@ -6,8 +6,13 @@ from detector.input_pipeline import Pipeline
 tf.logging.set_verbosity('INFO')
 
 
+"""
+This script does the training.
+Also it runs the evaluation now and then during the training.
+"""
+
 GPU_TO_USE = '0'
-CONFIG = 'config_shufflenet.json'
+CONFIG = 'config.json'  # 'config_mobilenet.json' or 'config_shufflenet.json'
 params = json.load(open(CONFIG))
 
 

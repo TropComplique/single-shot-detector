@@ -16,6 +16,7 @@ Also it creates a .pb frozen inference graph.
 
 
 CONFIG = 'config.json'
+params = json.load(open(CONFIG))
 OUTPUT_FOLDER = 'export/'  # for savedmodel
 GPU_TO_USE = '0'
 PB_FILE_PATH = 'inference/model.pb'
@@ -23,9 +24,6 @@ MIN_DIMENSION = 640
 WIDTH, HEIGHT = None, None
 BATCH_SIZE = 1  # must be an integer
 assert BATCH_SIZE == 1
-
-params = json.load(open(CONFIG))
-#params['min_dimension'] = MIN_DIMENSION,
 
 
 def export_savedmodel():
